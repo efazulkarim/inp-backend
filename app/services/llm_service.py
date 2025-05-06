@@ -1,12 +1,14 @@
 from typing import Dict, Any, List
-import openai
+import google.generativeai as genai
+from datetime import datetime
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configure OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Configure Google Gemini
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 class LLMService:
     @staticmethod
@@ -15,7 +17,7 @@ class LLMService:
         answers: List[Dict[str, Any]],
         question_texts: List[str]
     ) -> Dict[str, Any]:
-        """Generate analysis for a specific section using LLM"""
+        """Generate analysis for a specific section using Gemini"""
         
         # Construct the prompt
         prompt = f"""
@@ -32,7 +34,7 @@ class LLMService:
             prompt += f"\nQ: {q}\nA: {str(a)}\n"
 
         prompt += """
-        Please provide your analysis in the following JSON format:
+        Please provide your analysis in the following JSON format ONLY (no other text):
         {
             "insight": "your detailed insight here",
             "recommendations": ["recommendation 1", "recommendation 2"],
@@ -42,18 +44,21 @@ class LLMService:
         """
 
         try:
-            response = await openai.ChatCompletion.acreate(
-                model="gpt-4",  # or any other suitable model
-                messages=[
-                    {"role": "system", "content": "You are an expert business analyst and startup advisor."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1000
-            )
+            # Initialize Gemini model
+            model = genai.GenerativeModel('gemini-pro')
+            
+            # Generate response
+            response = await model.generate_content_async(prompt)
             
             # Parse the response
-            analysis = eval(response.choices[0].message.content)
+            response_text = response.text
+            # Find the JSON part (between first { and last })
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}') + 1
+            json_str = response_text[json_start:json_end]
+            
+            # Parse JSON
+            analysis = json.loads(json_str)
             return analysis
             
         except Exception as e:
@@ -74,7 +79,7 @@ class LLMService:
         idea_name: str,
         all_sections_analysis: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Generate overall strategic analysis using LLM"""
+        """Generate overall strategic analysis using Gemini"""
         
         prompt = f"""
         Based on the following section-wise analysis of the business idea "{idea_name}", provide:
@@ -95,7 +100,7 @@ class LLMService:
             prompt += f"{'-' * 50}\n"
 
         prompt += """
-        Please provide your analysis in the following JSON format:
+        Please provide your analysis in the following JSON format ONLY (no other text):
         {
             "overview": "comprehensive overview here",
             "strategic_next_steps": ["step 1", "step 2", "step 3", "step 4"],
@@ -105,18 +110,21 @@ class LLMService:
         """
 
         try:
-            response = await openai.ChatCompletion.acreate(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert business strategist and startup advisor."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1000
-            )
+            # Initialize Gemini model
+            model = genai.GenerativeModel('gemini-pro')
+            
+            # Generate response
+            response = await model.generate_content_async(prompt)
             
             # Parse the response
-            strategic_analysis = eval(response.choices[0].message.content)
+            response_text = response.text
+            # Find the JSON part (between first { and last })
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}') + 1
+            json_str = response_text[json_start:json_end]
+            
+            # Parse JSON
+            strategic_analysis = json.loads(json_str)
             return strategic_analysis
             
         except Exception as e:

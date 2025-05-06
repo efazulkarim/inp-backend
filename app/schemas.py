@@ -69,6 +69,17 @@ class AnswerResponse(BaseModel):
     step: int
     idea_id: int
 
+class AnswerPublic(BaseModel): 
+    id: int
+    question_id: int
+    ideaBoard_id: int
+    answer: Any 
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True 
+
 class StepProgress(BaseModel):
     completed: bool
     score: int

@@ -5,15 +5,15 @@ from app.auth import get_current_user  # Assuming you're using auth to get the c
 from app.models import Answer, User
 from app import schemas
 from app.database import get_db
-from typing import Dict, Any
+from typing import Dict, Any, List
 import json
 from datetime import datetime
 
 router = APIRouter()
 
 # Route to save an answer (POST /answers)
-@router.post("/answers", response_model=schemas.AnswerRead)
-def save_answer(
+@router.post("/answers", response_model=schemas.AnswerResponse)
+async def save_answer(
     answer: schemas.AnswerCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -63,8 +63,8 @@ def save_answer(
         raise HTTPException(status_code=400, detail="Database error: Unable to save answer") from e
 
 # Route to get all answers or by question ID (GET /answers)
-@router.get("/answers", response_model=list[schemas.AnswerRead])
-def get_answers(question_id: int = None, 
+@router.get("/answers", response_model=List[schemas.AnswerPublic])
+async def get_answers(question_id: int = None, 
                 db: Session = Depends(get_db),
                 current_user: User = Depends(get_current_user)):
     # If question_id is provided, filter by it; otherwise, get all answers
