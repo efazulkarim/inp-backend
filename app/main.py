@@ -1,9 +1,25 @@
 # app/main.py
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes
 
 app = FastAPI()
+
+# CORS middleware configuration
+origins = [
+    "http://localhost",
+    "http://localhost:3000",  # Assuming your frontend runs on port 3000
+    # Add any other origins your frontend might be served from
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():

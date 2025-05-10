@@ -23,17 +23,20 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     refresh_token = auth.create_refresh_token(data={"sub": db_user.email})
     return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
 
-@router.post("/register", response_model=schemas.UserCreate)
+@router.post("/register", response_model=schemas.UserDisplay)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+    db_user_by_username = db.query(models.User).filter(models.User.username == user.username).first()
+    if db_user_by_username:
+        raise HTTPException(status_code=400, detail="Username already taken")
     hashed_password = auth.hash_password(user.password)
     new_user = models.User(
-        email=user.email, 
-        first_name=user.first_name, 
-        last_name=user.last_name, 
+        email=user.email,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
         password=hashed_password
     )
     db.add(new_user)

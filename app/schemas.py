@@ -5,11 +5,18 @@ from datetime import datetime
 # Schema for user registration
 class UserBase(BaseModel):
     email: EmailStr
+    username: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str
+
+class UserDisplay(UserBase):
+    id: int
+
+    class Config:
+        orm_mode = True
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -21,7 +28,7 @@ class UserMe(UserBase):
     phone: Optional[str] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class Token(BaseModel):
     access_token: str
@@ -38,7 +45,7 @@ class IdeaResponse(IdeaCreate):
     user_id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class QuestionBase(BaseModel):
     text: str
@@ -55,7 +62,7 @@ class QuestionResponse(QuestionBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class QuestionnaireResponse(BaseModel):
     step: int
@@ -78,7 +85,7 @@ class AnswerPublic(BaseModel):
     updated_at: datetime
 
     class Config:
-        from_attributes = True 
+        orm_mode = True 
 
 class StepProgress(BaseModel):
     completed: bool
@@ -92,7 +99,7 @@ class IdeaProgressResponse(BaseModel):
     progress: Dict[int, StepProgress]
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class MessageResponse(BaseModel):
     msg: str
@@ -128,7 +135,7 @@ class ReportSection(BaseModel):
     recommendations: List[str]
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class ReportResponse(BaseModel):
     idea_name: str
@@ -138,4 +145,4 @@ class ReportResponse(BaseModel):
     strategic_next_steps: List[str]
 
     class Config:
-        from_attributes = True
+        orm_mode = True

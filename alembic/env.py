@@ -23,8 +23,11 @@ fileConfig(config.config_file_name)
 # Set the target metadata for 'autogenerate' support
 target_metadata = Base.metadata
 
-# Optionally, you can get the database URL from environment variables or other sources
-# config.set_main_option('sqlalchemy.url', os.getenv('DATABASE_URL'))
+# Force the correct URL for mysql-connector-python during Alembic runs
+# This will override the one from alembic.ini for the engine creation below if it was different,
+# and ensures it doesn't rely on os.getenv() which might be problematic.
+# actual_db_url = "mysql+mysqlconnector://root:%%2B1826%%2BDark@localhost:3306/inp"  # Escaped % to %%
+# config.set_main_option('sqlalchemy.url', actual_db_url) # REMOVED THIS HARDCODING
 
 def run_migrations_offline():
     """Run migrations in 'offline' mode."""
