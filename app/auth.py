@@ -8,6 +8,7 @@ from .database import get_db
 from .models import User
 from app.blacklist import is_token_blacklisted
 import os
+import secrets
 
 # Token expiration times
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
@@ -42,7 +43,7 @@ def create_access_token(data: dict):
 # JWT Token creation for refresh token
 def create_refresh_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -103,3 +104,39 @@ def refresh_access_token(refresh_token: str, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "refresh_token": refresh_token  # Include the same refresh token in the response
     }
+
+# Password reset token expiration time (in minutes)
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", 15))
+
+# Create a password reset token
+def create_password_reset_token(email: str) -> str:
+    """
+    Create a JWT token for password reset
+    """
+    expires = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    token_data = {
+        "sub": email,
+        "exp": expires,
+        "type": "password_reset"
+    }
+    return jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+
+# Verify password reset token
+def verify_password_reset_token(token: str) -> str:
+    """
+    Verify a password reset token and return the email if valid
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired password reset token"
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        token_type = payload.get("type")
+        
+        if email is None or token_type != "password_reset":
+            raise credentials_exception
+        return email
+    except JWTError:
+        raise credentials_exception

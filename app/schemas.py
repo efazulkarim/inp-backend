@@ -146,3 +146,10 @@ class ReportResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str

@@ -6,6 +6,10 @@ from app.database import get_db
 from app.auth import get_current_user
 from app.blacklist import blacklist_token, is_token_blacklisted
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import logging
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 auth_scheme = HTTPBearer()
@@ -56,3 +60,61 @@ def logout(token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
     # Add the token to the blacklist
     blacklist_token(token.credentials)
     return {"msg": "Successfully logged out"}
+
+@router.post("/forgot-password", response_model=schemas.MessageResponse)
+def forgot_password(request: schemas.ForgotPassword, db: Session = Depends(get_db)):
+    """
+    Request a password reset. This endpoint will generate a token and in a real application would
+    send an email with a link containing the token.
+    """
+    # Check if the user exists
+    user = db.query(models.User).filter(models.User.email == request.email).first()
+    if not user:
+        # Don't reveal that the user doesn't exist for security reasons
+        # Instead, log it and return a generic message
+        logger.info(f"Password reset requested for non-existent email: {request.email}")
+        return {"msg": "If your email is registered, you will receive a password reset link."}
+    
+    # Generate password reset token
+    reset_token = auth.create_password_reset_token(user.email)
+    
+    # TODO: In a real application, send an email with the reset token/link
+    # For development, we'll just return the token in the response
+    logger.info(f"Password reset token generated for {user.email}: {reset_token}")
+    
+    # Return success message
+    return {"msg": "If your email is registered, you will receive a password reset link."}
+
+@router.post("/reset-password", response_model=schemas.MessageResponse)
+def reset_password(request: schemas.ResetPassword, db: Session = Depends(get_db)):
+    """
+    Reset the password using the token received from the forgot-password endpoint.
+    """
+    # Verify the reset token and get the email
+    try:
+        email = auth.verify_password_reset_token(request.token)
+    except HTTPException as e:
+        # Token verification failed
+        logger.warning(f"Invalid password reset token: {request.token}")
+        raise e
+    
+    # Find the user
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        # This shouldn't happen if the token was valid, but check anyway
+        logger.error(f"User not found for valid token with email: {email}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Hash the new password and update the user
+    hashed_password = auth.hash_password(request.new_password)
+    user.password = hashed_password
+    db.commit()
+    
+    # Log the success
+    logger.info(f"Password successfully reset for user: {email}")
+    
+    # Return success message
+    return {"msg": "Password has been reset successfully. You can now log in with your new password."}
