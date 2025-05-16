@@ -7,8 +7,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Get API key from environment
+api_key = os.getenv("GOOGLE_API_KEY")
+print(f"[LLM Service] API key found: {'Yes' if api_key else 'No'}")
+print(f"[LLM Service] API key length: {len(api_key) if api_key else 0}")
+
 # Configure Google Gemini
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+genai.configure(api_key=api_key)
 
 class LLMService:
     @staticmethod
@@ -44,12 +49,15 @@ class LLMService:
         """
 
         try:
-            # Initialize Gemini model
-            model = genai.GenerativeModel('gemini-pro')
+            print(f"[LLM Service] Trying to initialize Gemini model...")
+            # Initialize Gemini model - using a more recent model but keeping the old API format
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
+            print(f"[LLM Service] Sending request to Gemini...")
             # Generate response
             response = await model.generate_content_async(prompt)
             
+            print(f"[LLM Service] Received response from Gemini")
             # Parse the response
             response_text = response.text
             # Find the JSON part (between first { and last })
@@ -62,7 +70,7 @@ class LLMService:
             return analysis
             
         except Exception as e:
-            print(f"Error in LLM service: {str(e)}")
+            print(f"[LLM Service] Error in LLM service: {str(e)}")
             # Fallback response
             return {
                 "insight": f"Unable to generate insight for {section_name} due to technical error.",
@@ -81,41 +89,18 @@ class LLMService:
     ) -> Dict[str, Any]:
         """Generate overall strategic analysis using Gemini"""
         
-        prompt = f"""
-        Based on the following section-wise analysis of the business idea "{idea_name}", provide:
-        1. A comprehensive overview (2-3 sentences)
-        2. 4-5 strategic next steps
-        
-        Section Analysis:
-        {'-' * 50}
-        """
-        
-        for analysis in all_sections_analysis:
-            prompt += f"\n{analysis['section']}\n"
-            prompt += f"Score: {analysis['score']}/15\n"
-            prompt += f"Insight: {analysis['insight']}\n"
-            prompt += "Recommendations:\n"
-            for rec in analysis['recommendations']:
-                prompt += f"- {rec}\n"
-            prompt += f"{'-' * 50}\n"
-
-        prompt += """
-        Please provide your analysis in the following JSON format ONLY (no other text):
-        {
-            "overview": "comprehensive overview here",
-            "strategic_next_steps": ["step 1", "step 2", "step 3", "step 4"],
-            "key_strengths": ["strength 1", "strength 2"],
-            "key_challenges": ["challenge 1", "challenge 2"]
-        }
-        """
+        prompt = "Please write a brief analysis of a business idea in JSON format with these fields: overview, strategic_next_steps, key_strengths, key_challenges"
 
         try:
-            # Initialize Gemini model
-            model = genai.GenerativeModel('gemini-pro')
+            print(f"[LLM Service] Trying to initialize Gemini model for strategic overview...")
+            # Initialize Gemini model - using a more recent model but keeping the old API format
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
+            print(f"[LLM Service] Sending strategic overview request to Gemini...")
             # Generate response
             response = await model.generate_content_async(prompt)
             
+            print(f"[LLM Service] Received strategic overview response from Gemini")
             # Parse the response
             response_text = response.text
             # Find the JSON part (between first { and last })
@@ -123,12 +108,14 @@ class LLMService:
             json_end = response_text.rfind('}') + 1
             json_str = response_text[json_start:json_end]
             
+            print(f"[LLM Service] Response text: {response_text[:100]}...")
+            
             # Parse JSON
             strategic_analysis = json.loads(json_str)
             return strategic_analysis
             
         except Exception as e:
-            print(f"Error in LLM service: {str(e)}")
+            print(f"[LLM Service] Error in strategic overview generation: {str(e)}")
             return {
                 "overview": "Unable to generate strategic overview due to technical error.",
                 "strategic_next_steps": ["Please try regenerating the report"],

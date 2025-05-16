@@ -103,3 +103,15 @@ class Archive(Base):
     idea_description = Column(Text, nullable=True)
     user_id = Column(Integer, nullable=False)
     archived_at = Column(DateTime)
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    idea_id = Column(Integer, ForeignKey("ideaboard.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    status = Column(String(50))  # queued, processing, completed, failed
+    content = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)

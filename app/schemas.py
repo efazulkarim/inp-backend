@@ -184,3 +184,41 @@ class StepQuestionsResponse(BaseModel):
     
     class Config:
         orm_mode = True
+
+# Report related schemas
+class ReportRequestResponse(BaseModel):
+    report_id: int
+    status: str
+    message: str
+
+class ReportStatusResponse(BaseModel):
+    report_id: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    error_message: Optional[str] = None
+    
+    class Config:
+        orm_mode = True
+
+class ReportSectionRecommendation(BaseModel):
+    title: str
+    description: str
+    
+    class Config:
+        orm_mode = True
+
+class ReportDetailSection(BaseModel):
+    category: str
+    score: int
+    weighted_score: int
+    insight: str
+    recommendations: List[str]
+    
+    class Config:
+        orm_mode = True
+
+class PDFExportOptions(BaseModel):
+    include_charts: bool = True
+    include_recommendations: bool = True
+    custom_branding: Optional[str] = None

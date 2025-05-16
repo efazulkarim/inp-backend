@@ -173,13 +173,13 @@ async def save_step_data(
                 else:
                     new_answer = Answer(
                         question_id=db_question_id,
-                        ideaBoard_id=idea_id,
-                        user_id=current_user.id,
-                        answer=answer_data,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow()
-                    )
-                    db.add(new_answer)
+                    ideaBoard_id=idea_id,
+                    user_id=current_user.id,
+                    answer=answer_data,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.add(new_answer)
         
         # Update progress tracking
         if not idea.completed_steps:
