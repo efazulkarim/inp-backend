@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, DateTime , JSON
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, DateTime , JSON, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -77,7 +77,11 @@ class IdeaBoard(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     idea_name = Column(String(255), index=True)  
     idea_description = Column(String(500))  
-    pin = Column(Integer, nullable=True)  
+    pin = Column(Integer, nullable=True)
+    # Add these new fields
+    current_step = Column(Integer, default=0, nullable=False)
+    is_complete = Column(Boolean, default=False, nullable=False)
+    completed_steps = Column(JSON, default=list, nullable=True)  # Using JSON since you're using JSON elsewhere 
 
 
 class Trash(Base):

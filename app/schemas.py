@@ -43,6 +43,9 @@ class IdeaCreate(BaseModel):
 class IdeaResponse(IdeaCreate):
     id: int
     user_id: int
+    current_step: Optional[int] = 0
+    is_complete: Optional[bool] = False
+    completed_steps: Optional[List[int]] = []
 
     class Config:
         orm_mode = True
@@ -75,6 +78,8 @@ class AnswerResponse(BaseModel):
     message: str
     step: int
     idea_id: int
+    current_step: Optional[int] = None
+    is_complete: Optional[bool] = None
 
 class AnswerPublic(BaseModel): 
     id: int
@@ -93,10 +98,10 @@ class StepProgress(BaseModel):
 
 class IdeaProgressResponse(BaseModel):
     idea_id: int
-    total_steps: int
+    current_step: int
+    is_complete: bool
     completed_steps: List[int]
-    total_score: int
-    progress: Dict[int, StepProgress]
+    total_steps: int
 
     class Config:
         orm_mode = True
@@ -153,3 +158,29 @@ class ForgotPassword(BaseModel):
 class ResetPassword(BaseModel):
     token: str
     new_password: str
+
+# New schemas for improved ideaboard API
+class QuestionData(BaseModel):
+    id: str  # Readable ID like "age", "location"
+    type: str  # "text", "multiple_choice", "single_choice"
+    value: Union[str, List[str]]  # String for text/single choice, list for multiple choice
+
+class StepDataCreate(BaseModel):
+    step_number: int
+    questions: List[QuestionData]
+
+class QuestionDetail(BaseModel):
+    id: str
+    question_text: str
+    description: Optional[str] = None
+    question_type: str
+    options: Optional[List[str]] = None
+    
+class StepQuestionsResponse(BaseModel):
+    step_number: int
+    title: str
+    description: Optional[str] = None
+    questions: List[QuestionDetail]
+    
+    class Config:
+        orm_mode = True
