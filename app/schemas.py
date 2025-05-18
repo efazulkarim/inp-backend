@@ -222,3 +222,51 @@ class PDFExportOptions(BaseModel):
     include_charts: bool = True
     include_recommendations: bool = True
     custom_branding: Optional[str] = None
+
+# CustomerPersona schemas
+class CustomerPersonaBase(BaseModel):
+    persona_name: str
+    tag: Optional[str] = None
+    idea_id: Optional[int] = None
+    
+    # Personal information
+    age_range: Optional[str] = None
+    gender: Optional[str] = None
+    education: Optional[str] = None
+    location: Optional[str] = None
+    
+    # Professional information
+    role: Optional[str] = None
+    company_size: Optional[str] = None
+    industry: Optional[str] = None
+    income_range: Optional[str] = None
+    work_environment: Optional[str] = None
+    
+    # Goals and challenges
+    goals: Optional[List[str]] = None
+    challenges: Optional[List[str]] = None
+    
+    # Behavior
+    tools_used: Optional[List[str]] = None
+    decision_factors: Optional[List[str]] = None
+    information_sources: Optional[List[str]] = None
+    user_journey_stage: Optional[str] = None
+    
+    # Emotional triggers
+    pain_points: Optional[List[str]] = None
+    motivations: Optional[List[str]] = None
+
+class CustomerPersonaCreate(CustomerPersonaBase):
+    pass
+
+class CustomerPersonaUpdate(CustomerPersonaBase):
+    persona_name: Optional[str] = None
+    
+class CustomerPersonaResponse(CustomerPersonaBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True

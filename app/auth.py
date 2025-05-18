@@ -106,7 +106,7 @@ def refresh_access_token(refresh_token: str, db: Session = Depends(get_db)):
     }
 
 # Password reset token expiration time (in minutes)
-PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", 15))
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", 45))
 
 # Create a password reset token
 def create_password_reset_token(email: str) -> str:

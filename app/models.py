@@ -115,3 +115,42 @@ class Report(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
+
+class CustomerPersona(Base):
+    __tablename__ = "customer_personas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    idea_id = Column(Integer, ForeignKey("ideaboard.id"), nullable=True)
+    persona_name = Column(String(255), nullable=False)
+    tag = Column(String(100), nullable=True)
+    
+    # Personal information
+    age_range = Column(String(50), nullable=True)
+    gender = Column(String(50), nullable=True)
+    education = Column(String(100), nullable=True)
+    location = Column(String(100), nullable=True)
+    
+    # Professional information
+    role = Column(String(100), nullable=True)
+    company_size = Column(String(50), nullable=True)
+    industry = Column(String(100), nullable=True)
+    income_range = Column(String(50), nullable=True)
+    work_environment = Column(String(50), nullable=True)
+    
+    # Goals and challenges
+    goals = Column(JSON, nullable=True)  # Array of goals
+    challenges = Column(JSON, nullable=True)  # Array of challenges
+    
+    # Behavior
+    tools_used = Column(JSON, nullable=True)  # Array of tools
+    decision_factors = Column(JSON, nullable=True)  # Array of decision factors
+    information_sources = Column(JSON, nullable=True)  # How they stay informed
+    user_journey_stage = Column(String(100), nullable=True)
+    
+    # Emotional triggers
+    pain_points = Column(JSON, nullable=True)  # Array of pain points
+    motivations = Column(JSON, nullable=True)  # Array of motivations
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

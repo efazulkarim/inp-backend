@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes
+from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes, customerboard_routes
 
 app = FastAPI()
 
@@ -25,8 +25,9 @@ app.add_middleware(
 def read_root():
     return {"message": "API is running!"}
 
-# Create the database tables
-Base.metadata.create_all(bind=engine)
+# Comment out automatic table creation to avoid conflicts with Alembic migrations
+# Use Alembic migrations instead for database schema management
+# Base.metadata.create_all(bind=engine)
 
 # Include the authentication and user routes
 app.include_router(auth_routes.router, prefix="/auth", tags=["auth"])
@@ -36,3 +37,4 @@ app.include_router(ideaboard_routes.router, prefix="/api/ideaboard", tags=["idea
 app.include_router(trash_routes.router, prefix="/api/trash", tags=["trash"])
 app.include_router(archive_routes.router, prefix="/archive", tags=["Archive"])
 app.include_router(report_routes.router, prefix="/api/report", tags=["report"])
+app.include_router(customerboard_routes.router, prefix="/api/customerboard", tags=["customerboard"])
