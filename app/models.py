@@ -18,6 +18,14 @@ class User(Base):
     status = Column(Integer, default=1)
     verified = Column(Integer, default=0)
 
+    # Stripe subscription-related columns
+    subscription_plan = Column(String(50), nullable=True)  # e.g., "free", "basic", "pro"
+    subscription_status = Column(String(50), nullable=True)  # e.g., "active", "canceled"
+    stripe_customer_id = Column(String(255), nullable=True, unique=True)
+    stripe_subscription_id = Column(String(255), nullable=True, unique=True)
+    current_period_end = Column(DateTime, nullable=True)
+    trial_end = Column(DateTime, nullable=True)
+
     # Relationship with Answer
     answers = relationship("Answer", back_populates="user", cascade="all, delete-orphan")
 

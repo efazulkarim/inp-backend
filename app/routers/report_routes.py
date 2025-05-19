@@ -212,33 +212,31 @@ async def download_report(
 # Background task function
 async def generate_report_background(report_id: int, idea_id: int, user_id: int):
     """Background task to generate a report"""
-    # Create a new db session for this background task
     db = SessionLocal()
     try:
         # Update report status to processing
         report = db.query(Report).filter(Report.id == report_id).first()
         if not report:
             return
-            
         report.status = "processing"
         report.updated_at = datetime.utcnow()
         db.commit()
-        
+
         # Get idea details
         idea = db.query(IdeaBoard).filter(IdeaBoard.id == idea_id).first()
-        
+
         # Get all answers for this idea
         answers = db.query(Answer).filter(
             Answer.ideaBoard_id == idea_id,
             Answer.user_id == user_id
         ).all()
-        
+
         if not answers:
             report.status = "failed"
             report.error_message = "No answers found for this idea"
             db.commit()
             return
-        
+
         # Group answers by section
         sections = {
             "target_audience": {"title": "Target audience"},
@@ -250,22 +248,22 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             "customer_adoption": {"title": "Customer adoption potential"},
             "key_metrics": {"title": "Key metrics & goal"}
         }
-        
+
         # Process each section with LLM
         section_analyses = []
         total_score = 0
-        
+
         for section_key, section_info in sections.items():
             # Get questions and answers for this section
             section_questions = db.query(Questionnaire).filter(
                 Questionnaire.q_uuid.startswith(f"step_{section_key}_")
             ).all()
-            
+
             section_answers = [
                 answer for answer in answers
                 if answer.question_id in [q.id for q in section_questions]
             ]
-            
+
             # Generate analysis using LLM
             try:
                 analysis = await LLMService.generate_section_analysis(
@@ -273,7 +271,6 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                     [a.answer for a in section_answers],
                     [q.text for q in section_questions]
                 )
-                
                 section_analyses.append({
                     "section": section_info["title"],
                     "score": analysis["score"],
@@ -284,13 +281,13 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             except Exception as e:
                 # Log the error but continue with other sections
                 print(f"Error analyzing section {section_key}: {str(e)}")
-        
+
         # Generate strategic overview
         strategic_analysis = await LLMService.generate_strategic_overview(
             idea.idea_name,
             section_analyses
         )
-        
+
         # Save the report data
         report.content = {
             "idea_name": idea.idea_name,
@@ -300,7 +297,7 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 {
                     "category": analysis["section"],
                     "score": analysis["score"],
-                    "weighted_score": analysis["score"], 
+                    "weighted_score": analysis["score"],
                     "insight": analysis["insight"],
                     "recommendations": analysis["recommendations"]
                 }
@@ -311,7 +308,7 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
         report.status = "completed"
         report.updated_at = datetime.utcnow()
         db.commit()
-        
+
     except Exception as e:
         # If any error occurs, mark report as failed
         try:
