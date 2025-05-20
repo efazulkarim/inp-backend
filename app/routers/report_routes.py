@@ -327,53 +327,48 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
 # Simple test endpoint for LLM
 @router.get("/test-llm")
 async def test_llm_connection():
-    """Test if the LLM connection is working properly"""
+    """Test if the LLM connection (now OpenAI) is working properly"""
     try:
-        # Check if API key is configured
-        api_key = os.getenv("GOOGLE_API_KEY")
+        # Check if OpenAI API key is configured
+        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return {
                 "status": "error",
-                "message": "GOOGLE_API_KEY environment variable not found or empty",
-                "hint": "Make sure to add GOOGLE_API_KEY to your .env file or environment variables"
+                "message": "OPENAI_API_KEY environment variable not found or empty",
+                "hint": "Make sure to add OPENAI_API_KEY to your .env file or environment variables"
             }
             
-        # Create a simple test prompt for the LLM
-        test_data = {
-            "insight": "Test insight for product validation.",
-            "recommendations": ["Consider market research", "Focus on user needs"],
-            "score": 10
-        }
-        
-        # Test with a minimal analysis to see if Gemini responds
+        # Test with a minimal analysis to see if OpenAI responds
+        # LLMService.generate_strategic_overview now uses OpenAI
         result = await LLMService.generate_strategic_overview(
-            "Test Product",
+            "Test Product for OpenAI",
             [
                 {
                     "section": "Test Section",
                     "score": 10,
-                    "insight": "This is a test insight.",
-                    "recommendations": ["Test recommendation 1", "Test recommendation 2"]
+                    "insight": "This is a test insight for OpenAI.",
+                    "recommendations": ["OpenAI test recommendation 1", "OpenAI test recommendation 2"]
                 }
             ]
         )
         
-        if result and "overview" in result and result["overview"] != "Unable to generate strategic overview due to technical error.":
+        # Check if the overview is not the specific fallback message for OpenAI errors
+        if result and "overview" in result and result["overview"] != "Unable to generate strategic overview due to an AI service error.":
             return {
                 "status": "success",
-                "message": "LLM connection is working correctly",
+                "message": "OpenAI LLM connection is working correctly",
                 "sample_response": result
             }
         else:
             return {
                 "status": "error",
-                "message": "LLM returned fallback response, indicating a connection or processing error",
+                "message": "OpenAI LLM returned a fallback response, indicating a connection or processing error within the LLM call.",
                 "response": result,
-                "hint": "Check your API key and permissions for Gemini Pro model"
+                "hint": "Check your OpenAI API key, plan, and billing details. Also check server logs for errors from LLMService."
             }
     except Exception as e:
         return {
             "status": "error",
-            "message": f"LLM connection failed: {str(e)}",
+            "message": f"OpenAI LLM connection test failed: {str(e)}",
             "error_details": str(e)
         }
