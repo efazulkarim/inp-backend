@@ -5,7 +5,26 @@ import os
 import json
 from dotenv import load_dotenv
 
-load_dotenv()
+# Try multiple possible locations for the .env file
+# Adjusted paths for the 'app/services' directory
+possible_env_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env'),  # project root
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'),  # app directory
+    os.path.join(os.path.dirname(__file__), '.env'),  # services directory (less likely but possible)
+    '.env' # current working directory (if script run from root)
+]
+
+env_found = False
+for env_path in possible_env_paths:
+    if os.path.exists(env_path):
+        print(f"[LLM Service] 💡 Found .env file at: {env_path}")
+        load_dotenv(dotenv_path=env_path)
+        env_found = True
+        break
+
+if not env_found:
+    print("[LLM Service] ⚠️ WARNING: No .env file found in any standard location!")
+
 
 # Get API key from environment
 api_key = os.getenv("GOOGLE_API_KEY")

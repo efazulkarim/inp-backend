@@ -51,77 +51,8 @@ async def get_step_questions(
     
     return {"step": step, "questions": questions}
 
-@router.post("/answers/{idea_id}/{step}", response_model=schemas.AnswerResponse)
-async def save_step_answers(
-    idea_id: int,
-    step: int,
-    answers: schemas.AnswerCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Save answers for a specific step"""
-    # Verify idea belongs to user
-    idea = db.query(IdeaBoard).filter(
-        IdeaBoard.id == idea_id,
-        IdeaBoard.user_id == current_user.id
-    ).first()
+
     
-    if not idea:
-        raise HTTPException(status_code=404, detail="Idea not found")
-    
-    try:
-        # Save each answer
-        for question_id, answer_data in answers.answers.items():
-            existing_answer = db.query(Answer).filter(
-                Answer.question_id == question_id,
-                Answer.ideaBoard_id == idea_id,
-                Answer.user_id == current_user.id
-            ).first()
-            
-            if existing_answer:
-                existing_answer.answer = answer_data
-                existing_answer.updated_at = datetime.utcnow()
-            else:
-                new_answer = Answer(
-                    question_id=question_id,
-                    ideaBoard_id=idea_id,
-                    user_id=current_user.id,
-                    answer=answer_data,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
-                )
-                db.add(new_answer)
-        
-        # Update progress tracking
-        if not idea.completed_steps:
-            idea.completed_steps = []
-            
-        # Add this step to completed_steps if not already there
-        if step not in idea.completed_steps:
-            completed_steps = idea.completed_steps.copy() if idea.completed_steps else []
-            completed_steps.append(step)
-            idea.completed_steps = completed_steps
-        
-        # Update current_step to next step if this is the highest step completed
-        if step >= (idea.current_step or 0):
-            idea.current_step = step + 1
-        
-        # If this is the final step (step 11), mark as complete
-        if step == 11:
-            idea.is_complete = True
-        
-        db.commit()
-        return {
-            "message": "Answers saved successfully", 
-            "step": step, 
-            "idea_id": idea_id,
-            "current_step": idea.current_step,
-            "is_complete": idea.is_complete
-        }
-    
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error saving answers: {str(e)}")
 
 @router.post("/steps/{idea_id}/{step}", response_model=schemas.AnswerResponse)
 async def save_step_data(
