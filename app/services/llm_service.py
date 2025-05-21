@@ -84,7 +84,7 @@ class LLMService:
             response_content = response.choices[0].message.content
             if response_content:
                 analysis = json.loads(response_content)
-                return analysis
+            return analysis
             else:
                 raise ValueError("Empty response content from OpenAI.")
             
@@ -149,7 +149,7 @@ class LLMService:
             response_content = response.choices[0].message.content
             if response_content:
                 strategic_analysis = json.loads(response_content)
-                return strategic_analysis
+            return strategic_analysis
             else:
                 raise ValueError("Empty response content for strategic overview from OpenAI.")
             
