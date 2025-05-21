@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 import os
 import tempfile
-from app.services.llm_service import LLMService
+from app.services.llm_service import LLMService, VULTR_CHAT_MODEL
 from app.services.pdf_service import generate_report_pdf
 
 router = APIRouter()
@@ -327,48 +327,64 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
 # Simple test endpoint for LLM
 @router.get("/test-llm")
 async def test_llm_connection():
-    """Test if the LLM connection (now OpenAI) is working properly"""
+    """Test if the LLM connection (now Vultr) is working properly"""
     try:
-        # Check if OpenAI API key is configured
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("VULTR_API_KEY")
         if not api_key:
             return {
                 "status": "error",
-                "message": "OPENAI_API_KEY environment variable not found or empty",
-                "hint": "Make sure to add OPENAI_API_KEY to your .env file or environment variables"
+                "message": "VULTR_API_KEY environment variable not found or empty",
+                "hint": "Make sure to add VULTR_API_KEY to your .env file or environment variables"
             }
             
-        # Test with a minimal analysis to see if OpenAI responds
-        # LLMService.generate_strategic_overview now uses OpenAI
         result = await LLMService.generate_strategic_overview(
-            "Test Product for OpenAI",
+            "Test Product for Vultr",
             [
                 {
-                    "section": "Test Section",
+                    "section": "Test Section for Vultr",
                     "score": 10,
-                    "insight": "This is a test insight for OpenAI.",
-                    "recommendations": ["OpenAI test recommendation 1", "OpenAI test recommendation 2"]
+                    "insight": "This is a test insight for Vultr.",
+                    "recommendations": ["Vultr test recommendation 1", "Vultr test recommendation 2"]
                 }
             ]
         )
         
-        # Check if the overview is not the specific fallback message for OpenAI errors
-        if result and "overview" in result and result["overview"] != "Unable to generate strategic overview due to an AI service error.":
+        overview_text = result.get("overview", "").lower() # Get overview safely and lowercase it
+
+        # More explicit check for error indicators in the overview
+        has_known_error_in_overview = (
+            overview_text == "vultr api key not configured."
+            or overview_text.startswith("vultr api http error") 
+            or overview_text.startswith("vultr api request error")
+            or overview_text == "unable to generate strategic overview due to an api error."
+            or overview_text == "unable to generate strategic overview due to a processing error."
+        )
+
+        is_successful_llm_response = (
+            result 
+            and "error" not in result # No explicit 'error' key from our _make_vultr_request helper
+            and result.get("overview") # Overview field must exist
+            and not has_known_error_in_overview
+            and len(result.get("strategic_next_steps", [])) > 0 # Heuristic for actual content
+        )
+
+        if is_successful_llm_response:
             return {
                 "status": "success",
-                "message": "OpenAI LLM connection is working correctly",
-                "sample_response": result
+                "message": "Vultr LLM connection is working correctly and generated a valid response.",
+                "sample_response": result,
+                "model_used": VULTR_CHAT_MODEL
             }
         else:
             return {
                 "status": "error",
-                "message": "OpenAI LLM returned a fallback response, indicating a connection or processing error within the LLM call.",
+                "message": "Vultr LLM API call was made, but returned an error or an unexpected/fallback response.",
                 "response": result,
-                "hint": "Check your OpenAI API key, plan, and billing details. Also check server logs for errors from LLMService."
+                "hint": "Check your VULTR_API_KEY, Vultr account status (billing, quotas), selected model ID ('{}'), and Vultr API status. The response above might contain more details from Vultr. Error 422 often means the request data was unprocessable (e.g. invalid model or parameters).".format(VULTR_CHAT_MODEL)
             }
     except Exception as e:
         return {
             "status": "error",
-            "message": f"OpenAI LLM connection test failed: {str(e)}",
+            "message": f"Vultr LLM connection test failed with an unexpected exception: {str(e)}",
             "error_details": str(e)
         }
