@@ -14,9 +14,21 @@ app = FastAPI()
 # CORS middleware configuration
 origins = [
     "http://localhost",
-    "http://localhost:3000",  # Assuming your frontend runs on port 3000
+    "http://localhost:3000",  # React development server
+    "http://127.0.0.1",
+    "http://127.0.0.1:3000",
+    "https://localhost",
+    "https://localhost:3000",
+    # Production URLs - REPLACE THESE WITH YOUR ACTUAL DOMAINS
+    "https://inp-dashboard.netlify.app/",
+    "https://www.yourdomain.com",
+    "https://app.yourdomain.com",
     # Add any other origins your frontend might be served from
 ]
+
+# For development, you can also use a wildcard
+if os.getenv("ENVIRONMENT") == "production":
+    origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +36,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]  # Allow frontend to read custom headers
 )
 
 @app.get("/")
