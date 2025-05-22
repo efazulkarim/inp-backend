@@ -10,15 +10,25 @@ from alembic import context
 # Add the parent directory to sys.path to import app modules
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-# Import your models here
-from app.database import Base  # Ensure this path is correct
+# Import your models here. Crucially, import SQLALCHEMY_DATABASE_URL
+# from app.database.py which has the robust .env loading.
+from app.database import Base, SQLALCHEMY_DATABASE_URL
 from app import models  # This will import all models
 
-# this is the Alembic Config object, which provides access to the values within the .ini file in use.
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
 config = context.config
 
 # Interpret the config file for Python logging.
 fileConfig(config.config_file_name)
+
+# Set the sqlalchemy.url in the Alembic config *before* it's used by engine_from_config.
+# This ensures that the DATABASE_URL loaded from .env by app/database.py is used.
+if SQLALCHEMY_DATABASE_URL:
+    print(f"[alembic/env.py] 💡 Setting Alembic's sqlalchemy.url from app.database: {SQLALCHEMY_DATABASE_URL}")
+    config.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)
+else:
+    print("[alembic/env.py] ⚠️ WARNING: SQLALCHEMY_DATABASE_URL from app.database is not set. Alembic might use a default from alembic.ini or fail.")
 
 # Set the target metadata for 'autogenerate' support
 target_metadata = Base.metadata
@@ -31,7 +41,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline():
     """Run migrations in 'offline' mode."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = config.get_main_option("sqlalchemy.url") # This will now pick up the URL we set above
     context.configure(
         url=url, target_metadata=target_metadata, literal_binds=True, dialect_opts={"paramstyle": "named"}
     )
@@ -46,6 +56,7 @@ def run_migrations_online():
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # The sqlalchemy.url is implicitly used here from the config object
     )
 
     with connectable.connect() as connection:
