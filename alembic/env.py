@@ -25,8 +25,11 @@ fileConfig(config.config_file_name)
 # Set the sqlalchemy.url in the Alembic config *before* it's used by engine_from_config.
 # This ensures that the DATABASE_URL loaded from .env by app/database.py is used.
 if SQLALCHEMY_DATABASE_URL:
-    print(f"[alembic/env.py] 💡 Setting Alembic's sqlalchemy.url from app.database: {SQLALCHEMY_DATABASE_URL}")
-    config.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)
+    print(f"[alembic/env.py] 💡 Original sqlalchemy.url from app.database: {SQLALCHEMY_DATABASE_URL}")
+    # Escape '%' for configparser by replacing it with '%%'
+    escaped_db_url = SQLALCHEMY_DATABASE_URL.replace('%', '%%')
+    print(f"[alembic/env.py] 💡 Setting Alembic's sqlalchemy.url (escaped for configparser): {escaped_db_url}")
+    config.set_main_option("sqlalchemy.url", escaped_db_url)
 else:
     print("[alembic/env.py] ⚠️ WARNING: SQLALCHEMY_DATABASE_URL from app.database is not set. Alembic might use a default from alembic.ini or fail.")
 
