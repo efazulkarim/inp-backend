@@ -20,7 +20,7 @@ origins = [
     "https://localhost",
     "https://localhost:3000",
     # Production URLs - REPLACE THESE WITH YOUR ACTUAL DOMAINS
-    "https://inp-dashboard.netlify.app/",
+    "https://inp-dashboard.netlify.app",
     "https://www.yourdomain.com",
     "https://app.yourdomain.com",
     # Add any other origins your frontend might be served from
