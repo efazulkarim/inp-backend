@@ -240,13 +240,16 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
         # Group answers by section
         sections = {
             "target_audience": {"title": "Target audience"},
-            "customer_needs": {"title": "Customer needs"},
+            "problem_identification": {"title": "Problem Identification"},
+            "consequence_of_not_solving": {"title": "Consequence of not solving the problem"},
             "articulate_solution": {"title": "Articulate solution"},
-            "key_benefits": {"title": "Key benefits & advantages"},
-            "market_opportunities": {"title": "Market opportunities"},
-            "competitive_advantages": {"title": "Competitive advantages"},
-            "customer_adoption": {"title": "Customer adoption potential"},
-            "key_metrics": {"title": "Key metrics & goal"}
+            "before_after": {"title": "Before & After"},
+            "key_benefits": {"title": "Key benefits & Differentiation"},
+            "market_opportunity": {"title": "Market Opportunity"},
+            "competitive_advantage": {"title": "Competitive Advantage"},
+            "customer_adoption": {"title": "Customer Adoption Potential"},
+            "success_metrics": {"title": "Success Metrics & Goals"},
+            "feasibility": {"title": "Feasibility"}
         }
 
         # Process each section with LLM
