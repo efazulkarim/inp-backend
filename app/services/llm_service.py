@@ -62,7 +62,9 @@ class LLMService:
                     timeout=60.0 # Increased timeout for potentially longer LLM responses
                 )
                 response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
-                return response.json()
+                result = response.json()
+                token_usage = result.get("usage", {}).get("total_tokens", 0)
+                return result, token_usage
             except httpx.HTTPStatusError as e:
                 print(f"[LLM Service - Vultr] HTTP error: {e.response.status_code} - {e.response.text}")
                 # Try to parse error response from Vultr if available
@@ -144,7 +146,7 @@ class LLMService:
 
         try:
             print(f"[LLM Service - Vultr] Sending request for section '{section_name}' to {VULTR_CHAT_MODEL}...")
-            api_response = await LLMService._make_vultr_request(vultr_payload)
+            api_response, token_usage = await LLMService._make_vultr_request(vultr_payload)
             
             if "error" in api_response: # Check if helper returned an error structure
                 print(f"[LLM Service - Vultr] Error in section analysis for '{section_name}': {api_response.get('details', api_response.get('error'))}")
@@ -152,7 +154,8 @@ class LLMService:
                     "insight": api_response.get("insight", f"Unable to generate insight for {section_name} due to an API error."),
                     "recommendations": api_response.get("recommendations", ["Try again later."]),
                     "score": api_response.get("score", 0),
-                    "reasoning": api_response.get("reasoning", "Error in Vultr API call.")
+                    "reasoning": api_response.get("reasoning", "Error in Vultr API call."),
+                    "token_usage": token_usage
                 }
 
             print(f"[LLM Service - Vultr] Received response from {VULTR_CHAT_MODEL} for section '{section_name}'.")
@@ -188,7 +191,8 @@ class LLMService:
                 "insight": f"Unable to generate insight for {section_name} due to a processing error.",
                 "recommendations": ["Try again later.", "Review service logs."],
                 "score": 0,
-                "reasoning": "Error in Vultr analysis processing."
+                "reasoning": "Error in Vultr analysis processing.",
+                "token_usage": token_usage
             }
 
     @staticmethod
@@ -233,7 +237,7 @@ class LLMService:
 
         try:
             print(f"[LLM Service - Vultr] Sending strategic overview request for '{idea_name}' to {VULTR_CHAT_MODEL}...")
-            api_response = await LLMService._make_vultr_request(vultr_payload)
+            api_response, token_usage = await LLMService._make_vultr_request(vultr_payload)
 
             if "error" in api_response: # Check if helper returned an error structure
                 print(f"[LLM Service - Vultr] Error in strategic overview for '{idea_name}': {api_response.get('details', api_response.get('error'))}")
@@ -241,7 +245,8 @@ class LLMService:
                     "overview": api_response.get("overview", "Unable to generate strategic overview due to an API error."),
                     "strategic_next_steps": api_response.get("strategic_next_steps", ["Try again later."]),
                     "key_strengths": api_response.get("key_strengths", []),
-                    "key_challenges": api_response.get("key_challenges", [])
+                    "key_challenges": api_response.get("key_challenges", []),
+                    "token_usage": token_usage
                 }
 
             print(f"[LLM Service - Vultr] Received strategic overview response from {VULTR_CHAT_MODEL}.")
@@ -276,5 +281,6 @@ class LLMService:
                 "overview": "Unable to generate strategic overview due to a processing error.",
                 "strategic_next_steps": ["Try again later.", "Review service logs."],
                 "key_strengths": [],
-                "key_challenges": []
+                "key_challenges": [],
+                "token_usage": token_usage
             }
