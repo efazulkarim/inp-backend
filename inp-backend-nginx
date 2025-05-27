@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name 45.32.109.192;  # Replace with your domain name or IP
+    server_name api.insightpilot.co;  # Replace with your domain name or IP
 
     location / {
         proxy_pass http://localhost:8000;
