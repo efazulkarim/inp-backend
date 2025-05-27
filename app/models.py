@@ -132,33 +132,49 @@ class CustomerPersona(Base):
     idea_id = Column(Integer, ForeignKey("ideaboard.id"), nullable=True)
     persona_name = Column(String(255), nullable=False)
     tag = Column(String(100), nullable=True)
-    
-    # Personal information
+    # 1. Personal Information
     age_range = Column(String(50), nullable=True)
-    gender = Column(String(50), nullable=True)
-    education = Column(String(100), nullable=True)
-    location = Column(String(100), nullable=True)
-    
-    # Professional information
-    role = Column(String(100), nullable=True)
+    gender_identity = Column(String(50), nullable=True)
+    education_level = Column(String(100), nullable=True)
+    location_region = Column(String(100), nullable=True)
+    # 2. Professional Information
+    role_occupation = Column(String(100), nullable=True)
     company_size = Column(String(50), nullable=True)
-    industry = Column(String(100), nullable=True)
-    income_range = Column(String(50), nullable=True)
-    work_environment = Column(String(50), nullable=True)
-    
-    # Goals and challenges
-    goals = Column(JSON, nullable=True)  # Array of goals
-    challenges = Column(JSON, nullable=True)  # Array of challenges
-    
-    # Behavior
-    tools_used = Column(JSON, nullable=True)  # Array of tools
-    decision_factors = Column(JSON, nullable=True)  # Array of decision factors
-    information_sources = Column(JSON, nullable=True)  # How they stay informed
+    industry_types = Column(JSON, nullable=True)
+    annual_income = Column(String(50), nullable=True)
+    work_styles = Column(JSON, nullable=True)
+    tech_proficiency = Column(Integer, nullable=True)
+    # 3. Goals & Challenges
+    goals = Column(JSON, nullable=True)
+    challenges = Column(JSON, nullable=True)
+    # 4. Behavior and Decision-Making
+    tools_used = Column(JSON, nullable=True)
+    info_sources = Column(JSON, nullable=True)
+    decision_factors = Column(JSON, nullable=True)
+    # 5. Emotional Triggers and Motivations
+    emotions = Column(JSON, nullable=True)
+    motivations = Column(JSON, nullable=True)
+    # 6. User Journey
     user_journey_stage = Column(String(100), nullable=True)
-    
-    # Emotional triggers
-    pain_points = Column(JSON, nullable=True)  # Array of pain points
-    motivations = Column(JSON, nullable=True)  # Array of motivations
-    
+    # 7. Pain Points
+    pain_points = Column(JSON, nullable=True)
+    # 8. Preferred Features & Communication
+    preferred_features = Column(JSON, nullable=True)
+    preferred_communication_channels = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CustomerPersonaQuestionnaire(Base):
+    __tablename__ = "customer_persona_questionnaire"
+
+    id = Column(Integer, primary_key=True, index=True)
+    q_uuid = Column(String(255))
+    text = Column(Text)
+    body = Column(Text)
+    remarks = Column(Text)
+    input_type = Column(String(100))
+    range = Column(Text)
+    category = Column(String(100))  # New column for section/category
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+    status = Column(Integer)

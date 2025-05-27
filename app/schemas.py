@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator, root_validator
 from typing import Optional, Dict, Any, List, Union
 from datetime import datetime
 
@@ -228,33 +228,41 @@ class CustomerPersonaBase(BaseModel):
     persona_name: str
     tag: Optional[str] = None
     idea_id: Optional[int] = None
-    
-    # Personal information
+    # 1. Personal Information
     age_range: Optional[str] = None
-    gender: Optional[str] = None
-    education: Optional[str] = None
-    location: Optional[str] = None
-    
-    # Professional information
-    role: Optional[str] = None
+    gender_identity: Optional[str] = None
+    education_level: Optional[str] = None
+    location_region: Optional[str] = None
+    # 2. Professional Information
+    role_occupation: Optional[str] = None
     company_size: Optional[str] = None
-    industry: Optional[str] = None
-    income_range: Optional[str] = None
-    work_environment: Optional[str] = None
-    
-    # Goals and challenges
+    industry_types: Optional[List[str]] = None
+    annual_income: Optional[str] = None
+    work_styles: Optional[List[str]] = None
+    tech_proficiency: Optional[int] = None
+    # 3. Goals & Challenges
     goals: Optional[List[str]] = None
     challenges: Optional[List[str]] = None
-    
-    # Behavior
+    # 4. Behavior and Decision-Making
     tools_used: Optional[List[str]] = None
+    info_sources: Optional[List[str]] = None
     decision_factors: Optional[List[str]] = None
-    information_sources: Optional[List[str]] = None
-    user_journey_stage: Optional[str] = None
-    
-    # Emotional triggers
-    pain_points: Optional[List[str]] = None
+    # 5. Emotional Triggers and Motivations
+    emotions: Optional[List[str]] = None
     motivations: Optional[List[str]] = None
+    # 6. User Journey
+    user_journey_stage: Optional[str] = None
+    # 7. Pain Points
+    pain_points: Optional[List[str]] = None
+    # 8. Preferred Features & Communication
+    preferred_features: Optional[List[str]] = None
+    preferred_communication_channels: Optional[List[str]] = None
+
+    @validator('tech_proficiency')
+    def tech_proficiency_range(cls, v):
+        if v is not None and not (0 <= v <= 10):
+            raise ValueError('tech_proficiency must be between 0 and 10')
+        return v
 
 class CustomerPersonaCreate(CustomerPersonaBase):
     pass
@@ -268,5 +276,22 @@ class CustomerPersonaResponse(CustomerPersonaBase):
     created_at: datetime
     updated_at: datetime
     
+    class Config:
+        orm_mode = True
+
+class CustomerPersonaQuestionnaireBase(BaseModel):
+    q_uuid: str
+    text: str
+    body: Optional[str] = None
+    remarks: Optional[str] = None
+    input_type: str
+    range: Optional[List[Any]] = None
+    status: Optional[int] = 1
+
+class CustomerPersonaQuestionnaireResponse(CustomerPersonaQuestionnaireBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
     class Config:
         orm_mode = True
