@@ -237,19 +237,19 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             db.commit()
             return
 
-        # Group answers by section
+        # Group answers by section with max scores
         sections = {
-            "target_audience": {"title": "Target audience"},
-            "problem_identification": {"title": "Problem Identification"},
-            "consequence_of_not_solving": {"title": "Consequence of not solving the problem"},
-            "articulate_solution": {"title": "Articulate solution"},
-            "before_after": {"title": "Before & After"},
-            "key_benefits": {"title": "Key benefits & Differentiation"},
-            "market_opportunity": {"title": "Market Opportunity"},
-            "competitive_advantage": {"title": "Competitive Advantage"},
-            "customer_adoption": {"title": "Customer Adoption Potential"},
-            "success_metrics": {"title": "Success Metrics & Goals"},
-            "feasibility": {"title": "Feasibility"}
+            "target_audience": {"title": "Target audience", "max_score": 9},
+            "problem_identification": {"title": "Problem Identification", "max_score": 9},
+            "consequence_of_not_solving": {"title": "Consequence of not solving the problem", "max_score": 9},
+            "articulate_solution": {"title": "Articulate solution", "max_score": 9},
+            "before_after": {"title": "Before & After", "max_score": 9},
+            "key_benefits": {"title": "Key benefits & Differentiation", "max_score": 9},
+            "market_opportunity": {"title": "Market Opportunity", "max_score": 9},
+            "competitive_advantage": {"title": "Competitive Advantage", "max_score": 9},
+            "customer_adoption": {"title": "Customer Adoption Potential", "max_score": 9},
+            "success_metrics": {"title": "Success Metrics & Goals", "max_score": 9},
+            "feasibility": {"title": "Feasibility", "max_score": 10} # Last section has max_score 10
         }
 
         # Process each section with LLM
@@ -272,11 +272,13 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 analysis = await LLMService.generate_section_analysis(
                     section_info["title"],
                     [a.answer for a in section_answers],
-                    [q.text for q in section_questions]
+                    [q.text for q in section_questions],
+                    section_info["max_score"] # Pass max_score for the section
                 )
                 section_analyses.append({
                     "section": section_info["title"],
                     "score": analysis["score"],
+                    "max_score": section_info["max_score"], # Store max_score
                     "insight": analysis["insight"],
                     "recommendations": analysis["recommendations"]
                 })
@@ -300,7 +302,8 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 {
                     "category": analysis["section"],
                     "score": analysis["score"],
-                    "weighted_score": analysis["score"],
+                    "max_score": analysis["max_score"], # Include max_score for PDF generation
+                    "weighted_score": analysis["score"], # Placeholder for weighted_score, consider if actual weighting is needed
                     "insight": analysis["insight"],
                     "recommendations": analysis["recommendations"]
                 }

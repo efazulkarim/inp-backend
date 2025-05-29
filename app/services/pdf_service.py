@@ -50,7 +50,7 @@ async def generate_report_pdf(report_data, idea_name):
     elements.append(Spacer(1, 24))
     
     # Overall score
-    elements.append(Paragraph(f"Overall Score: {report_data['overall_score']}/120", heading_style))
+    elements.append(Paragraph(f"Overall Score: {report_data['overall_score']}/100", heading_style))
     elements.append(Spacer(1, 12))
     
     # Report overview
@@ -90,7 +90,7 @@ async def generate_report_pdf(report_data, idea_name):
     
     for section in report_data['sections']:
         # Section title with background
-        elements.append(Paragraph(f"{section['category']}: Score {section['score']}/15", styles['SectionTitle']))
+        elements.append(Paragraph(f"{section['category']}: Score {section['score']}/{section['max_score']}", styles['SectionTitle']))
         elements.append(Spacer(1, 6))
         
         # Insight

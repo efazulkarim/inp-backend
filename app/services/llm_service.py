@@ -1,7 +1,5 @@
 from typing import Dict, Any, List
 import httpx  # Import httpx
-# import google.generativeai as genai # No longer needed
-# from openai import AsyncOpenAI # No longer needed
 from datetime import datetime
 import os
 import json
@@ -106,25 +104,32 @@ class LLMService:
     async def generate_section_analysis(
         section_name: str,
         answers: List[Dict[str, Any]], # Expecting answers in format {"type": "...", "value": ...}
-        question_texts: List[str]
+        question_texts: List[str],
+        max_section_score: int = 9 # Default to 9, can be 10 for the last section
     ) -> Dict[str, Any]:
         """Generate analysis for a specific section using Vultr"""
         
-        system_message_content = (
-            f"You are an expert business analyst. Based on the following answers for the '{section_name}' section "
-            f"of a business idea validation questionnaire, provide:\n"
-            f"1. A detailed insight (2-3 sentences).\n"
-            f"2. Two specific, actionable recommendations.\n"
-            f"3. A score out of 15 based on the completeness and quality of the answers.\n"
-            f"4. A brief reasoning for the score.\n\n"
-            f"Respond ONLY with a valid JSON object in the following format (no other text or explanations before or after the JSON object). Ensure the JSON is well-formed:\n" # Added "Ensure the JSON is well-formed"
-            f"{{\n"
-            f"    \"insight\": \"your detailed insight here\",\n"
-            f"    \"recommendations\": [\"recommendation 1\", \"recommendation 2\"],\n"
-            f"    \"score\": <integer_between_0_and_15>,\n" # Changed to <integer_between_0_and_15> for clarity
-            f"    \"reasoning\": \"brief explanation of the score\"\n"
-            f"}}"
-        )
+        system_message_content = f"""You are an expert business analyst and startup mentor. Your task is to analyze the user's answers for a specific section of their idea validation process. The section is '{section_name}'.
+
+Please provide:
+1.  **Score**: An integer score from 0 to {max_section_score}, where {max_section_score} is excellent and 0 is poor or insufficient information. Base this score on the completeness, clarity, and strength of the answers provided for the questions in this section.
+2.  **Insight**: A concise (2-3 sentences) key insight derived from the user's answers for this section. This should highlight the most critical takeaway.
+3.  **Recommendations**: 2-3 actionable recommendations (each a short phrase or sentence) to help the user improve this section of their idea or to consider next steps related to this section.
+4.  **Reasoning**: A brief (1-2 sentences) explanation of why you gave the score you did, referencing specific aspects of the answers or lack thereof.
+
+Format your response strictly as a JSON object with the keys "score" (int), "insight" (str), "recommendations" (list of str), and "reasoning" (str).
+Example JSON (if max_section_score was 9):
+{{
+  "score": 8,
+  "insight": "The user has clearly identified a significant problem and has initial thoughts on a solution.",
+  "recommendations": [
+    "Further validate the problem with a larger sample size.",
+    "Detail the unique selling proposition more clearly.",
+    "Outline potential risks and mitigation strategies."
+  ],
+  "reasoning": "Score reflects good problem identification but needs more detail on solution differentiation and risk assessment."
+}}
+"""
         
         user_content_parts = [f"Section: {section_name}", "Questions and Answers:", '-' * 20]
         for i, (q_text, ans_obj) in enumerate(zip(question_texts, answers)):
