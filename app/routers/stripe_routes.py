@@ -77,8 +77,8 @@ async def create_checkout_session(
                 'quantity': 1,
             }],
             mode='subscription',
-            success_url=f"{os.getenv('FRONTEND_URL')}/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{os.getenv('FRONTEND_URL')}/plans",
+            success_url=f"{os.getenv('FRONTEND_URL')}/dashboard/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{os.getenv('FRONTEND_URL')}/pricing",
             metadata={
                 "user_id": current_user.id,
                 "app_email": current_user.email  # Store email in metadata
