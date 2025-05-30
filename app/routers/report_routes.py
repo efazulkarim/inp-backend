@@ -279,6 +279,7 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                     "section": section_info["title"],
                     "score": analysis["score"],
                     "max_score": section_info["max_score"], # Store max_score
+                    "weighted_score": section_info["max_score"], # Set weighted_score to max_score
                     "insight": analysis["insight"],
                     "recommendations": analysis["recommendations"]
                 })
@@ -303,7 +304,7 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                     "category": analysis["section"],
                     "score": analysis["score"],
                     "max_score": analysis["max_score"], # Include max_score for PDF generation
-                    "weighted_score": analysis["score"], # Placeholder for weighted_score, consider if actual weighting is needed
+                    "weighted_score": analysis["weighted_score"], # Use the weighted_score we set earlier (equal to max_score)
                     "insight": analysis["insight"],
                     "recommendations": analysis["recommendations"]
                 }
