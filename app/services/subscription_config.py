@@ -4,6 +4,24 @@ This file defines the 3-tier subscription model with pricing and features.
 """
 import os
 from typing import Dict, Any, List, Optional
+from dotenv import load_dotenv
+
+# Robust .env loading (similar to llm_service.py)
+possible_env_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),  # project root
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"),  # app parent dir
+    os.path.join(os.path.dirname(__file__), ".env"),  # services dir
+    ".env"  # current working directory
+]
+env_found = False
+for env_path in possible_env_paths:
+    if os.path.exists(env_path):
+        print(f"[Subscription Config] 💡 Found .env file at: {env_path}")
+        load_dotenv(dotenv_path=env_path)
+        env_found = True
+        break
+if not env_found:
+    print("[Subscription Config] ⚠️ WARNING: No .env file found!")
 
 # -----------------------------------------------------------------------------
 # ENVIRONMENT VARIABLES (PRICE IDS)
@@ -97,7 +115,7 @@ SUBSCRIPTION_PLANS: Dict[str, Dict[str, Any]] = {
         "description": "Special price for your whole team – contact sales",
         "contact_sales": True,
         "features": [
-            "Applicable for Universities and organisations with >500 team size",
+            "Applicable for Universities and organizations more than 500 team size",
         ],
         "limits": {
             "idea_boards": float('inf'),

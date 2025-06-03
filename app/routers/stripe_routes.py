@@ -21,31 +21,38 @@ import json
 from typing import Optional
 from fastapi.security import HTTPBearer
 
-# Force loading of environment variables from the .env file
-# Try multiple possible locations for the .env file
+# Robust .env loading (similar to llm_service.py)
 possible_env_paths = [
-    '.env',                                        # project root
-    os.path.join(os.path.dirname(__file__), '.env'),  # in routers dir
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'),  # in app dir
-    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env'),  # in project root
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),  # project root
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"),  # app dir
+    os.path.join(os.path.dirname(__file__), ".env"),  # routers dir
+    ".env"  # current working directory
 ]
 
+env_found = False
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"💡 Found .env file at: {env_path}")
+        print(f"[Stripe Routes] 💡 Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
+        env_found = True
         break
-else:
-    print("⚠️ WARNING: No .env file found in any standard location!")
+        
+if not env_found:
+    print("[Stripe Routes] ⚠️ WARNING: No .env file found in any standard location!")
 
-# Set Stripe API Key directly
+# Set Stripe API Key and print debug info
 stripe_key = os.getenv("STRIPE_SECRET_KEY")
 stripe.api_key = stripe_key
-print(f"🔑 Stripe API Key: {'Found (starts with ' + stripe_key[:4] + '...)' if stripe_key else 'NOT FOUND!'}")
+print(f"[Stripe Routes] 🔑 Stripe API Key: {'Found (starts with ' + stripe_key[:7] + '...)' if stripe_key else 'NOT FOUND!'}")
 
-# Get webhook secret
+# Get webhook secret and print debug info
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-print(f"🔒 Stripe Webhook Secret: {'Found' if STRIPE_WEBHOOK_SECRET else 'NOT FOUND!'}")
+print(f"[Stripe Routes] 🔒 Stripe Webhook Secret: {'Found (starts with ' + STRIPE_WEBHOOK_SECRET[:7] + '...)' if STRIPE_WEBHOOK_SECRET else 'NOT FOUND!'}")
+
+# Debug: Print all important env vars to help troubleshoot
+print(f"[Stripe Routes] 🌐 Frontend URL: {os.getenv('FRONTEND_URL', 'NOT SET')}")
+print(f"[Stripe Routes] 📧 Solopreneur Price ID: {os.getenv('STRIPE_SOLOPRENEUR_PRICE_ID', 'NOT SET')}")
+print(f"[Stripe Routes] 🚀 Entrepreneur Price ID: {os.getenv('STRIPE_ENTREPRENEUR_PRICE_ID', 'NOT SET')}")
 
 router = APIRouter()
 security = HTTPBearer()
@@ -119,36 +126,68 @@ async def stripe_webhook(
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
+    # Debug output for troubleshooting
+    print(f"[Stripe Webhook] 🔥 Incoming webhook request")
+    print(f"[Stripe Webhook] 📝 Signature header: {'Present' if sig_header else 'MISSING'}")
+    print(f"[Stripe Webhook] 🔒 Using webhook secret: {'Set' if STRIPE_WEBHOOK_SECRET else 'NOT SET'}")
+
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, STRIPE_WEBHOOK_SECRET
         )
-    except ValueError:
+        print(f"[Stripe Webhook] ✅ Event signature verified successfully")
+    except ValueError as e:
+        print(f"[Stripe Webhook] ❌ Invalid payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError:
+    except stripe.error.SignatureVerificationError as e:
+        print(f"[Stripe Webhook] ❌ Signature verification failed: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
+
+    # Debug: Print event type
+    print(f"[Stripe Webhook] 🎯 Event type: {event['type']}")
 
     # Handle various webhook events
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
+        print(f"[Stripe Webhook] 🔥 Processing checkout.session.completed")
+        
+        # Debug: Print metadata
+        print(f"[Stripe Webhook] 📋 Session metadata: {session.get('metadata', {})}")
         
         # Extract data
         user_id = session['metadata']['user_id']
         subscription_id = session.get('subscription')
         customer_id = session['customer']
         
+        print(f"[Stripe Webhook] 👤 User ID from metadata: {user_id}")
+        print(f"[Stripe Webhook] 📋 Subscription ID: {subscription_id}")
+        
         # Retrieve subscription details
         subscription = stripe.Subscription.retrieve(subscription_id)
-        current_period_end = datetime.fromtimestamp(subscription['current_period_end'])
-        trial_end = datetime.fromtimestamp(subscription['trial_end']) if subscription.get('trial_end') else None
+        print(f"[Stripe Webhook] 📊 Subscription status: {subscription['status']}")
+        
+        # Safely extract dates (might not exist for new subscriptions)
+        current_period_end = None
+        trial_end = None
+        
+        if subscription.get('current_period_end'):
+            current_period_end = datetime.fromtimestamp(subscription['current_period_end'])
+            print(f"[Stripe Webhook] 📅 Current period end: {current_period_end}")
+        
+        if subscription.get('trial_end'):
+            trial_end = datetime.fromtimestamp(subscription['trial_end'])
+            print(f"[Stripe Webhook] 🆓 Trial end: {trial_end}")
         
         # Get product details
         product_id = subscription['items']['data'][0]['price']['product']
         product = stripe.Product.retrieve(product_id)
+        print(f"[Stripe Webhook] 🏷️ Product name: {product['name']}")
         
         # Update user in database
         user = db.query(User).filter(User.id == user_id).first()
+        print(f"[Stripe Webhook] 🔥 USER FOUND? {bool(user)}")
         if user:
+            print(f"[Stripe Webhook] 📝 Updating user {user.id} with subscription data")
             user.stripe_customer_id = customer_id
             user.stripe_subscription_id = subscription_id
             user.subscription_plan = product['name']
@@ -156,6 +195,9 @@ async def stripe_webhook(
             user.current_period_end = current_period_end
             user.trial_end = trial_end
             db.commit()
+            print(f"[Stripe Webhook] ✅ User {user.id} updated successfully - Status: {subscription['status']}, Plan: {product['name']}")
+        else:
+            print(f"[Stripe Webhook] ❌ No user found with ID: {user_id}")
 
             # Send invoice in background
             background_tasks.add_task(
