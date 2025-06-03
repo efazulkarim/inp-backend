@@ -5,11 +5,30 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes, customerboard_routes, stripe_routes
+from starlette.middleware.sessions import SessionMiddleware
+import secrets
 
-# Load .env from the app folder
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
+# Robust .env loading (similar to Stripe Routes)
+possible_env_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'),  # project root
+    os.path.join(os.path.dirname(__file__), '.env'),  # app directory
+    '.env'  # current working directory
+]
+env_found = False
+for env_path in possible_env_paths:
+    if os.path.exists(env_path):
+        print(f"[main.py] 💡 Found .env file at: {env_path}")
+        load_dotenv(dotenv_path=env_path)
+        env_found = True
+        break
+if not env_found:
+    print("[main.py] ⚠️ WARNING: No .env file found in any standard location!")
 
 app = FastAPI()
+
+# Add SessionMiddleware for OAuth (required by Authlib)
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY") or secrets.token_urlsafe(32)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
 # CORS middleware configuration
 origins = [

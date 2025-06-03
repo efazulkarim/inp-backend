@@ -1,3 +1,22 @@
+import os
+from dotenv import load_dotenv
+
+# Robust .env loading (similar to main.py and stripe_routes.py)
+possible_env_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'),  # project root
+    os.path.join(os.path.dirname(__file__), '.env'),  # app directory
+    '.env'  # current working directory
+]
+env_found = False
+for env_path in possible_env_paths:
+    if os.path.exists(env_path):
+        print(f"[auth.py] 💡 Found .env file at: {env_path}")
+        load_dotenv(dotenv_path=env_path)
+        env_found = True
+        break
+if not env_found:
+    print("[auth.py] ⚠️ WARNING: No .env file found in any standard location!")
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
 from datetime import datetime, timedelta
@@ -7,7 +26,6 @@ from sqlalchemy.orm import Session
 from .database import get_db
 from .models import User
 from app.blacklist import is_token_blacklisted
-import os
 import secrets
 
 # Token expiration times

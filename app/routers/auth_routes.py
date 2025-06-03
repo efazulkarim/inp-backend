@@ -1,31 +1,133 @@
 # app/routers/auth_routes.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from app import auth, schemas, models
+from app import auth, schemas, models # Assuming app.auth handles JWT creation
 from app.database import get_db
-from app.auth import get_current_user
-from app.blacklist import blacklist_token, is_token_blacklisted
+# get_current_user might be used for protected routes, not directly in OAuth flow here
+# from app.auth import get_current_user 
+from app.blacklist import blacklist_token # Keep if you have a manual logout for JWTs
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import logging
+from fastapi.responses import RedirectResponse, JSONResponse
+import os
+import traceback
+from authlib.integrations.starlette_client import OAuth
+from starlette.middleware.sessions import SessionMiddleware # Required for Oauth state
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-auth_scheme = HTTPBearer()
+auth_scheme = HTTPBearer() # Keep for other auth methods if any
 
-@router.post("/login", response_model=schemas.Token)
+# OAuth settings
+# Ensure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI are in your .env
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") # This will be used in authorize_redirect
+
+if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI]):
+    logger.error("Missing Google OAuth environment variables!")
+    # You might want to raise an error here or handle it gracefully
+
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'},
+)
+
+# The guide implies session middleware is needed for OAuth state management.
+# This should be added to your main FastAPI app, not here directly.
+# Example for main.py: app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
+# Make sure SESSION_SECRET_KEY is set in your .env file.
+
+@router.post("/login", response_model=schemas.Token) # Standard email/password login
 def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if not db_user:
-        raise HTTPException(status_code=400, detail="Invalid email or password")
-    
-    if not auth.verify_password(user.password, db_user.password):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
+    if not db_user or not auth.verify_password(user.password, db_user.password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or password")
     
     access_token = auth.create_access_token(data={"sub": db_user.email})
     refresh_token = auth.create_refresh_token(data={"sub": db_user.email})
     return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
+
+@router.get('/google/login')
+async def google_login_route(request: Request):
+    logger.info(f"[Google Login] Initiating Google OAuth login. Configured Redirect URI: {GOOGLE_REDIRECT_URI}")
+    # The redirect_uri for authorize_redirect should match one of the Authorized redirect URIs in your Google Cloud Console.
+    return await oauth.google.authorize_redirect(request, GOOGLE_REDIRECT_URI)
+
+@router.get('/google/callback')
+async def google_callback_route(request: Request, db: Session = Depends(get_db)):
+    logger.info(f"[Google Callback] Received callback. Request URL: {request.url}")
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        logger.info(f"[Google Callback] Token received successfully.") 
+        # logger.debug(f"[Google Callback] Full token: {token}") # Be cautious logging full tokens
+    except Exception as e:
+        logger.error(f"[Google Callback] Error authorizing access token: {e}")
+        logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"OAuth authorization failed: {str(e)}")
+
+    try:
+        user_info_google = token.get('userinfo')
+        if not user_info_google:
+            # If userinfo is not directly in the token, try parsing id_token
+            # This part depends on how authlib is configured and what Google returns
+            logger.info("[Google Callback] 'userinfo' not in token, attempting to parse id_token.")
+            user_info_google = await oauth.google.parse_id_token(token)
+            if not user_info_google:
+                 logger.error("[Google Callback] Failed to get user_info from token or id_token.")
+                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not fetch user information from Google.")
+        
+        logger.info(f"[Google Callback] User info from Google: {user_info_google}")
+        email = user_info_google.get('email')
+
+        if not email:
+            logger.error("[Google Callback] Email not found in user_info.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not provided by Google.")
+
+    except HTTPException as he:
+        raise he # Re-raise HTTPExceptions directly
+    except Exception as e:
+        logger.error(f"[Google Callback] Error processing user information: {e}")
+        logger.error(f"[Google Callback] Full token at error: {token}") # Log token for debugging
+        logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to process user information: {str(e)}")
+
+    # Check if user exists, else create
+    db_user = db.query(models.User).filter(models.User.email == email).first()
+    if not db_user:
+        logger.info(f"[Google Callback] User {email} not found. Creating new user.")
+        db_user = models.User(
+            email=email,
+            username=user_info_google.get('email', '').split('@')[0], # Use email part as username
+            first_name=user_info_google.get('given_name', ''),
+            last_name=user_info_google.get('family_name', ''),
+            password="",  # No password for OAuth users, or generate a random one if your model requires it
+            verified=True # Assume email is verified by Google
+        )
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        logger.info(f"[Google Callback] User {email} created successfully.")
+    else:
+        logger.info(f"[Google Callback] User {email} found in database.")
+
+    # Issue JWT tokens (using your existing app.auth methods)
+    access_token = auth.create_access_token(data={"sub": db_user.email})
+    refresh_token = auth.create_refresh_token(data={"sub": db_user.email})
+    logger.info(f"[Google Callback] JWTs created for user {email}.")
+
+    # Redirect to frontend with tokens
+    # Ensure FRONTEND_URL is set in your .env
+    frontend_url = os.getenv('FRONTEND_URL', '/') # Default to root if not set
+    response_url = f"{frontend_url}/oauth-success?access_token={access_token}&refresh_token={refresh_token}"
+    logger.info(f"[Google Callback] Redirecting to: {response_url}")
+    return RedirectResponse(url=response_url)
 
 @router.post("/register", response_model=schemas.UserDisplay)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
