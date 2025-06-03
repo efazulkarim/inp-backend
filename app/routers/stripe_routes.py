@@ -5,6 +5,15 @@ from app.models import User
 from app.auth import get_current_user
 from datetime import datetime
 import stripe
+from app.services.subscription_service import SubscriptionService
+from app.schemas import (
+    SubscriptionTier, 
+    SubscriptionPlanResponse,
+    SubscriptionStatus,
+    SubscriptionUpdateRequest, 
+    SubscriptionCreationResponse,
+    SubscriptionPortalResponse
+)
 import os
 from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
@@ -41,7 +50,16 @@ print(f"🔒 Stripe Webhook Secret: {'Found' if STRIPE_WEBHOOK_SECRET else 'NOT 
 router = APIRouter()
 security = HTTPBearer()
 
-@router.post("/create-checkout-session")
+@router.get("/plans")
+async def get_subscription_plans():
+    """Get all available subscription plans"""
+    try:
+        plans = await SubscriptionService.get_all_subscription_plans()
+        return SubscriptionPlanResponse(plans=plans)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/create-checkout-session", response_model=SubscriptionCreationResponse)
 async def create_checkout_session(
     price_id: str,
     user_email: str,
@@ -85,7 +103,10 @@ async def create_checkout_session(
             }
         )
         
-        return {"sessionId": session.id}
+        return SubscriptionCreationResponse(
+            session_id=session.id,
+            checkout_url=session.url
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -215,7 +236,7 @@ async def cancel_subscription(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/create-portal-session")
+@router.post("/create-portal-session", response_model=SubscriptionPortalResponse)
 async def create_portal_session(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -230,76 +251,51 @@ async def create_portal_session(
             return_url=f"{os.getenv('FRONTEND_URL')}/settings",
         )
 
-        return {"url": session.url}
+        return SubscriptionPortalResponse(portal_url=session.url)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/subscription-status")
+@router.get("/subscription-status", response_model=SubscriptionStatus)
 async def get_subscription_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get the current user's subscription status"""
     try:
-        if not current_user.stripe_subscription_id:
-            return {
-                "status": "inactive",
-                "plan": None,
-                "current_period_end": None,
-                "trial_end": None
-            }
-
-        # Get the latest subscription data from Stripe
-        subscription = stripe.Subscription.retrieve(current_user.stripe_subscription_id)
-        product = stripe.Product.retrieve(subscription.plan.product)
-
-        return {
-            "status": subscription.status,
-            "plan": product.name,
-            "current_period_end": datetime.fromtimestamp(subscription.current_period_end),
-            "trial_end": datetime.fromtimestamp(subscription.trial_end) if subscription.trial_end else None,
-            "cancel_at_period_end": subscription.cancel_at_period_end
-        }
+        # Update the user's subscription data from Stripe
+        await SubscriptionService.update_user_subscription_from_stripe(current_user, db)
+        
+        # Get subscription details from our service
+        subscription_details = await SubscriptionService.get_user_subscription_details(current_user)
+        
+        return SubscriptionStatus(
+            status=subscription_details["status"],
+            plan=subscription_details["plan"],
+            current_period_end=subscription_details["current_period_end"],
+            trial_end=subscription_details["trial_end"],
+            cancel_at_period_end=subscription_details["cancel_at_period_end"]
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/update-subscription")
 async def update_subscription(
-    price_id: str,
+    update_request: SubscriptionUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update the subscription to a new plan"""
-    if not current_user.stripe_subscription_id:
-        raise HTTPException(status_code=404, detail="No active subscription found")
-
     try:
-        # Retrieve the subscription
-        subscription = stripe.Subscription.retrieve(current_user.stripe_subscription_id)
-        
-        # Update the subscription
-        updated_subscription = stripe.Subscription.modify(
-            current_user.stripe_subscription_id,
-            items=[{
-                'id': subscription['items']['data'][0].id,
-                'price': price_id,
-            }],
+        result = await SubscriptionService.process_subscription_change(
+            user=current_user,
+            new_price_id=update_request.price_id,
+            db=db
         )
-        
-        # Get product details
-        product = stripe.Product.retrieve(updated_subscription['items']['data'][0]['price']['product'])
-        
-        # Update user record
-        current_user.subscription_plan = product['name']
-        current_user.subscription_status = updated_subscription['status']
-        current_user.current_period_end = datetime.fromtimestamp(updated_subscription['current_period_end'])
-        db.commit()
-        
-        return {
-            "status": "success",
-            "message": "Subscription updated successfully",
-            "new_plan": product['name']
-        }
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -25,7 +25,7 @@ if not env_found:
 # Vultr API Configuration
 VULTR_API_KEY = os.getenv("VULTR_API_KEY")
 VULTR_API_BASE_URL = "https://api.vultrinference.com/v1"
-VULTR_CHAT_MODEL = "deepseek-r1-distill-qwen-32b" # Replace with your desired Vultr model ID
+VULTR_CHAT_MODEL = "deepseek-r1-distill-llama-70b"
 # print(f"[LLM Service] Vultr API Key found: {'Yes' if VULTR_API_KEY else 'No'}")
 
 class LLMService:

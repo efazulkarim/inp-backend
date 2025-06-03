@@ -3,6 +3,7 @@
     "dotenv",
     "generativeai",
     "ideaboard",
-    "insightpilot"
+    "insightpilot",
+    "solopreneur"
   ]
 }

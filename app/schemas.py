@@ -295,3 +295,43 @@ class CustomerPersonaQuestionnaireResponse(CustomerPersonaQuestionnaireBase):
 
     class Config:
         orm_mode = True
+
+
+# Subscription schemas for 3-tier model
+class SubscriptionTier(BaseModel):
+    """Schema representing a subscription plan/price option returned to the frontend."""
+    plan_key: str  # e.g. "solopreneur", "entrepreneur"
+    id: Optional[str] = None  # Stripe price ID (None for contact-sales plans)
+    name: str
+    description: Optional[str] = None
+    price: Optional[float] = None  # Raw Stripe price amount (e.g. 312 for yearly)
+    display_price: Optional[float] = None  # Price to display per month (yearly → divided by 12)
+    currency: Optional[str] = "usd"
+    interval: Optional[str] = None  # "month", "year" or "custom"
+    contact_sales: Optional[bool] = False
+    features: List[str]
+
+class SubscriptionPlanResponse(BaseModel):
+    """Schema for returning available subscription plans"""
+    plans: List[SubscriptionTier]
+
+class SubscriptionStatus(BaseModel):
+    """Schema for returning subscription status"""
+    status: str  # "active", "canceled", "incomplete", etc.
+    plan: Optional[str] = None
+    current_period_end: Optional[datetime] = None
+    trial_end: Optional[datetime] = None
+    cancel_at_period_end: Optional[bool] = None
+
+class SubscriptionUpdateRequest(BaseModel):
+    """Schema for updating a subscription"""
+    price_id: str
+
+class SubscriptionCreationResponse(BaseModel):
+    """Schema for returning checkout session details"""
+    session_id: str
+    checkout_url: str
+
+class SubscriptionPortalResponse(BaseModel):
+    """Schema for returning portal session URL"""
+    portal_url: str
