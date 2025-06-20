@@ -124,7 +124,7 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
 
     # Redirect to frontend with tokens
     # Ensure FRONTEND_URL is set in your .env
-    frontend_url = os.getenv('FRONTEND_URL', 'https://inp-dashboard.netlify.app') # Default to root if not set
+    frontend_url = os.getenv('FRONTEND_URL', "https://app.insightpilot.co") # Default to root if not set
     response_url = f"{frontend_url}/oauth-success?access_token={access_token}&refresh_token={refresh_token}"
     logger.info(f"[Google Callback] Redirecting to: {response_url}")
     return RedirectResponse(url=response_url)
