@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from app.auth import get_current_user
-from app.models import Answer, User, IdeaBoard, Questionnaire, Report
+from app.models import Answer, User, IdeaBoard, Questionnaire, Report, CustomerPersona, IdeaPersonaLink
 from app import schemas
 from app.database import get_db, SessionLocal
 from datetime import datetime
@@ -237,6 +237,19 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             db.commit()
             return
 
+        # Get linked customer personas
+        persona_links = db.query(IdeaPersonaLink).filter(
+            IdeaPersonaLink.idea_id == idea_id
+        ).all()
+        
+        linked_personas = []
+        for link in persona_links:
+            persona = db.query(CustomerPersona).filter(
+                CustomerPersona.id == link.persona_id
+            ).first()
+            if persona:
+                linked_personas.append(persona)
+
         # Group answers by section with max scores
         sections = {
             "target_audience": {"title": "Target audience", "max_score": 9},
@@ -267,13 +280,14 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 if answer.question_id in [q.id for q in section_questions]
             ]
 
-            # Generate analysis using LLM
+            # Generate analysis using LLM with persona context
             try:
                 analysis = await LLMService.generate_section_analysis(
                     section_info["title"],
                     [a.answer for a in section_answers],
                     [q.text for q in section_questions],
-                    section_info["max_score"] # Pass max_score for the section
+                    section_info["max_score"], # Pass max_score for the section
+                    linked_personas  # Pass linked personas for context
                 )
                 section_analyses.append({
                     "section": section_info["title"],
@@ -288,10 +302,11 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 # Log the error but continue with other sections
                 print(f"Error analyzing section {section_key}: {str(e)}")
 
-        # Generate strategic overview
+        # Generate strategic overview with persona context
         strategic_analysis = await LLMService.generate_strategic_overview(
             idea.idea_name,
-            section_analyses
+            section_analyses,
+            linked_personas  # Pass linked personas for context
         )
 
         # Save the report data

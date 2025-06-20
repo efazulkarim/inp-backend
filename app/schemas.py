@@ -227,7 +227,6 @@ class PDFExportOptions(BaseModel):
 class CustomerPersonaBase(BaseModel):
     persona_name: str
     tag: Optional[str] = None
-    idea_id: Optional[int] = None
     # 1. Personal Information
     age_range: Optional[str] = None
     gender_identity: Optional[str] = None
@@ -286,6 +285,7 @@ class CustomerPersonaQuestionnaireBase(BaseModel):
     remarks: Optional[str] = None
     input_type: str
     range: Optional[List[Any]] = None
+    category: Optional[str] = None
     status: Optional[int] = 1
 
 class CustomerPersonaQuestionnaireResponse(CustomerPersonaQuestionnaireBase):
@@ -335,3 +335,27 @@ class SubscriptionCreationResponse(BaseModel):
 class SubscriptionPortalResponse(BaseModel):
     """Schema for returning portal session URL"""
     portal_url: str
+
+# Persona linking schemas
+class PersonaLinkCreate(BaseModel):
+    """Schema for linking a persona to an idea"""
+    persona_id: int
+
+class PersonaLinkResponse(BaseModel):
+    """Response after linking a persona"""
+    id: int
+    idea_id: int
+    persona_id: int
+    persona_name: str
+    created_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+class IdeaPersonasResponse(BaseModel):
+    """Response containing all personas linked to an idea"""
+    idea_id: int
+    personas: List[CustomerPersonaResponse]
+    
+    class Config:
+        orm_mode = True

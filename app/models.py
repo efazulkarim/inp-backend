@@ -129,7 +129,6 @@ class CustomerPersona(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    idea_id = Column(Integer, ForeignKey("ideaboard.id"), nullable=True)
     persona_name = Column(String(255), nullable=False)
     tag = Column(String(100), nullable=True)
     # 1. Personal Information
@@ -178,3 +177,17 @@ class CustomerPersonaQuestionnaire(Base):
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
     status = Column(Integer)
+
+class IdeaPersonaLink(Base):
+    __tablename__ = "idea_persona_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    idea_id = Column(Integer, ForeignKey("ideaboard.id"))
+    persona_id = Column(Integer, ForeignKey("customer_personas.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    idea = relationship("IdeaBoard")
+    persona = relationship("CustomerPersona")
+    user = relationship("User")

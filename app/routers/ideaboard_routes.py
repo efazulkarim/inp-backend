@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
 from datetime import datetime
 from app.auth import get_current_user
-from app.models import IdeaBoard, User, Questionnaire, Answer
+from app.models import IdeaBoard, User, Questionnaire, Answer, CustomerPersona, IdeaPersonaLink
 from app import schemas
 from app.database import get_db
 import json
@@ -266,3 +266,123 @@ async def get_step_data(
         description=step_descriptions.get(step),
         questions=question_details
     )
+
+@router.post("/ideas/{idea_id}/link-persona", response_model=schemas.PersonaLinkResponse)
+async def link_persona_to_idea(
+    idea_id: int,
+    persona_link: schemas.PersonaLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Link an existing customer persona to an idea"""
+    # Verify idea belongs to user
+    idea = db.query(IdeaBoard).filter(
+        IdeaBoard.id == idea_id,
+        IdeaBoard.user_id == current_user.id
+    ).first()
+    
+    if not idea:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    
+    # Verify persona belongs to user
+    persona = db.query(CustomerPersona).filter(
+        CustomerPersona.id == persona_link.persona_id,
+        CustomerPersona.user_id == current_user.id
+    ).first()
+    
+    if not persona:
+        raise HTTPException(status_code=404, detail="Customer persona not found")
+    
+    # Check if link already exists
+    existing_link = db.query(IdeaPersonaLink).filter(
+        IdeaPersonaLink.idea_id == idea_id,
+        IdeaPersonaLink.persona_id == persona_link.persona_id
+    ).first()
+    
+    if existing_link:
+        raise HTTPException(status_code=400, detail="This persona is already linked to this idea")
+    
+    # Create the link
+    new_link = IdeaPersonaLink(
+        idea_id=idea_id,
+        persona_id=persona_link.persona_id,
+        user_id=current_user.id
+    )
+    
+    db.add(new_link)
+    db.commit()
+    db.refresh(new_link)
+    
+    return {
+        "id": new_link.id,
+        "idea_id": new_link.idea_id,
+        "persona_id": new_link.persona_id,
+        "persona_name": persona.persona_name,
+        "created_at": new_link.created_at
+    }
+
+@router.get("/ideas/{idea_id}/personas", response_model=schemas.IdeaPersonasResponse)
+async def get_idea_personas(
+    idea_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all customer personas linked to an idea"""
+    # Verify idea belongs to user
+    idea = db.query(IdeaBoard).filter(
+        IdeaBoard.id == idea_id,
+        IdeaBoard.user_id == current_user.id
+    ).first()
+    
+    if not idea:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    
+    # Get all linked personas
+    persona_links = db.query(IdeaPersonaLink).filter(
+        IdeaPersonaLink.idea_id == idea_id
+    ).all()
+    
+    personas = []
+    for link in persona_links:
+        persona = db.query(CustomerPersona).filter(
+            CustomerPersona.id == link.persona_id
+        ).first()
+        if persona:
+            personas.append(persona)
+    
+    return {
+        "idea_id": idea_id,
+        "personas": personas
+    }
+
+@router.delete("/ideas/{idea_id}/personas/{persona_id}")
+async def unlink_persona_from_idea(
+    idea_id: int,
+    persona_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove a persona link from an idea"""
+    # Verify idea belongs to user
+    idea = db.query(IdeaBoard).filter(
+        IdeaBoard.id == idea_id,
+        IdeaBoard.user_id == current_user.id
+    ).first()
+    
+    if not idea:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    
+    # Find and delete the link
+    link = db.query(IdeaPersonaLink).filter(
+        IdeaPersonaLink.idea_id == idea_id,
+        IdeaPersonaLink.persona_id == persona_id,
+        IdeaPersonaLink.user_id == current_user.id
+    ).first()
+    
+    if not link:
+        raise HTTPException(status_code=404, detail="Persona link not found")
+    
+    db.delete(link)
+    db.commit()
+    
+    return {"message": "Persona unlinked successfully"}

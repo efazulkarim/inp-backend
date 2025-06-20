@@ -105,17 +105,36 @@ class LLMService:
         section_name: str,
         answers: List[Dict[str, Any]], # Expecting answers in format {"type": "...", "value": ...}
         question_texts: List[str],
-        max_section_score: int = 9 # Default to 9, can be 10 for the last section
+        max_section_score: int = 9, # Default to 9, can be 10 for the last section
+        linked_personas: List[Any] = None  # Add optional personas parameter
     ) -> Dict[str, Any]:
         """Generate analysis for a specific section using Vultr"""
         
+        # Build persona context if available
+        persona_context = ""
+        if linked_personas:
+            persona_context = "\n\nCustomer Personas Context:\n"
+            for persona in linked_personas:
+                persona_context += f"\nPersona: {persona.persona_name}"
+                if persona.tag:
+                    persona_context += f" ({persona.tag})"
+                persona_context += f"\n- Age Range: {persona.age_range}"
+                persona_context += f"\n- Role: {persona.role_occupation}"
+                persona_context += f"\n- Industry: {', '.join(persona.industry_types) if persona.industry_types else 'N/A'}"
+                persona_context += f"\n- Goals: {', '.join(persona.goals[:3]) if persona.goals else 'N/A'}"
+                persona_context += f"\n- Challenges: {', '.join(persona.challenges[:3]) if persona.challenges else 'N/A'}"
+                persona_context += f"\n- Pain Points: {', '.join(persona.pain_points[:3]) if persona.pain_points else 'N/A'}"
+                persona_context += "\n"
+        
         system_message_content = f"""You are an expert business analyst and startup mentor. Your task is to analyze the user's answers for a specific section of their idea validation process. The section is '{section_name}'.
 
+{persona_context}
+
 Please provide:
-1.  **Score**: An integer score from 0 to {max_section_score}, where {max_section_score} is excellent and 0 is poor or insufficient information. Base this score on the completeness, clarity, and strength of the answers provided for the questions in this section.
-2.  **Insight**: A concise (2-3 sentences) key insight derived from the user's answers for this section. This should highlight the most critical takeaway.
-3.  **Recommendations**: 2-3 actionable recommendations (each a short phrase or sentence) to help the user improve this section of their idea or to consider next steps related to this section.
-4.  **Reasoning**: A brief (1-2 sentences) explanation of why you gave the score you did, referencing specific aspects of the answers or lack thereof.
+1.  **Score**: An integer score from 0 to {max_section_score}, where {max_section_score} is excellent and 0 is poor or insufficient information. Base this score on the completeness, clarity, and strength of the answers provided for the questions in this section.{' Consider how well the answers align with the linked customer personas.' if linked_personas else ''}
+2.  **Insight**: A concise (2-3 sentences) key insight derived from the user's answers for this section. This should highlight the most critical takeaway.{' Reference the customer personas where relevant.' if linked_personas else ''}
+3.  **Recommendations**: 2-3 actionable recommendations (each a short phrase or sentence) to help the user improve this section of their idea or to consider next steps related to this section.{' Tailor recommendations to the specific customer personas.' if linked_personas else ''}
+4.  **Reasoning**: A brief (1-2 sentences) explanation of why you gave the score you did, referencing specific aspects of the answers or lack thereof.{' Include how well the solution addresses the personas needs.' if linked_personas else ''}
 
 Format your response strictly as a JSON object with the keys "score" (int), "insight" (str), "recommendations" (list of str), and "reasoning" (str).
 Example JSON (if max_section_score was 9):
@@ -203,20 +222,29 @@ Example JSON (if max_section_score was 9):
     @staticmethod
     async def generate_strategic_overview(
         idea_name: str,
-        all_sections_analysis: List[Dict[str, Any]]
+        all_sections_analysis: List[Dict[str, Any]],
+        linked_personas: List[Any] = None  # Add optional personas parameter
     ) -> Dict[str, Any]:
         """Generate overall strategic analysis using Vultr"""
+        
+        # Build persona context if available
+        persona_summary = ""
+        if linked_personas:
+            persona_summary = f"\n\nThe business is targeting {len(linked_personas)} customer persona(s):\n"
+            for persona in linked_personas:
+                persona_summary += f"- {persona.persona_name}: {persona.role_occupation or 'N/A'} in {', '.join(persona.industry_types[:2]) if persona.industry_types else 'N/A'} industry\n"
         
         system_prompt_content = (
             f"You are an expert business strategist.\n"
             f"Given the idea name and analyses of various sections of a business validation questionnaire, "
             f"provide an overall strategic analysis.\n"
+            f"{persona_summary}"
             f"Respond ONLY with a valid JSON object in the following format. Ensure the JSON is well-formed:\n"
             f"{{\n"
-            f"    \"overview\": \"A concise overall summary of the business idea's potential based on the section analyses (3-4 sentences).\",\n"
-            f"    \"strategic_next_steps\": [\"List 3-5 actionable strategic next steps for the user to pursue.\"],\n" # Changed to "List 3-5"
-            f"    \"key_strengths\": [\"List 2-3 key strengths identified from the analyses.\"],\n"
-            f"    \"key_challenges\": [\"List 2-3 key challenges or weaknesses identified.\"]\n"
+            f"    \"overview\": \"A concise overall summary of the business idea's potential based on the section analyses{' and how well it serves the target personas' if linked_personas else ''} (3-4 sentences).\",\n"
+            f"    \"strategic_next_steps\": [\"List 3-5 actionable strategic next steps for the user to pursue{', considering the specific needs of their target personas' if linked_personas else ''}.\"],\n" # Changed to "List 3-5"
+            f"    \"key_strengths\": [\"List 2-3 key strengths identified from the analyses{', especially in relation to serving the target personas' if linked_personas else ''}.\"],\n"
+            f"    \"key_challenges\": [\"List 2-3 key challenges or weaknesses identified{', particularly in meeting persona needs' if linked_personas else ''}.\"]\n"
             f"}}"
         )
 
