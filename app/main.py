@@ -33,13 +33,13 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 # CORS middleware configuration
 origins = [
     "http://localhost",
+    "https://inp-dashboard.netlify.app",
     "http://localhost:3000",  # React development server
     "http://127.0.0.1",
     "http://127.0.0.1:3000",
     "https://localhost",
     "https://localhost:3000",
     # Production URLs - REPLACE THESE WITH YOUR ACTUAL DOMAINS
-    "https://inp-dashboard.netlify.app",
     "https://www.yourdomain.com",
     "https://app.yourdomain.com",
     # Add any other origins your frontend might be served from
