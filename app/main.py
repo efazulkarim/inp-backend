@@ -76,3 +76,12 @@ app.include_router(archive_routes.router, prefix="/archive", tags=["Archive"])
 app.include_router(report_routes.router, prefix="/api/report", tags=["report"])
 app.include_router(customerboard_routes.router, prefix="/api/customerboard", tags=["customerboard"])
 app.include_router(stripe_routes.router, prefix="/api/stripe", tags=["stripe"])
+
+
+@auth_routes.router.get("/debug-oauth")
+async def debug_oauth():
+    return {
+        "frontend_url": os.getenv('FRONTEND_URL'),
+        "google_redirect_uri": os.getenv('GOOGLE_REDIRECT_URI'),
+        "environment": os.getenv('ENVIRONMENT')
+    }
