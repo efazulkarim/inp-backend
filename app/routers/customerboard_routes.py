@@ -255,18 +255,23 @@ async def get_personas_by_idea(
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found or not owned by the current user")
     
-    # Get all personas linked to this idea through IdeaPersonaLink
-    persona_links = db.query(IdeaPersonaLink).filter(
-        IdeaPersonaLink.idea_id == idea_id
-    ).all()
-    
+    # Get all personas linked to this idea through IdeaPersonaLink - make this optional
     personas = []
-    for link in persona_links:
-        persona = db.query(CustomerPersona).filter(
-            CustomerPersona.id == link.persona_id
-        ).first()
-        if persona:
-            personas.append(persona)
+    try:
+        persona_links = db.query(IdeaPersonaLink).filter(
+            IdeaPersonaLink.idea_id == idea_id
+        ).all()
+        
+        for link in persona_links:
+            persona = db.query(CustomerPersona).filter(
+                CustomerPersona.id == link.persona_id
+            ).first()
+            if persona:
+                personas.append(persona)
+    except Exception as e:
+        # If persona linking fails (e.g., table doesn't exist), return empty list
+        print(f"Warning: Could not load linked personas for idea {idea_id}: {str(e)}")
+        personas = []
     
     return personas
 

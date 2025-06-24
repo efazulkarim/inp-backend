@@ -25,17 +25,17 @@ if not env_found:
 # Vultr API Configuration
 VULTR_API_KEY = os.getenv("VULTR_API_KEY")
 VULTR_API_BASE_URL = "https://api.vultrinference.com/v1"
-VULTR_CHAT_MODEL = "deepseek-r1-distill-llama-70b"
+VULTR_CHAT_MODEL = "deepseek-r1-distill-qwen-32b"
 # print(f"[LLM Service] Vultr API Key found: {'Yes' if VULTR_API_KEY else 'No'}")
 
 class LLMService:
     @staticmethod
-    async def _make_vultr_request(payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _make_vultr_request(payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
         """Helper method to make requests to Vultr API"""
         if not VULTR_API_KEY:
             print("[LLM Service - Vultr] CRITICAL ERROR: VULTR_API_KEY not found.")
             # Return a structure that matches an error response from the main methods
-            return {
+            error_response = {
                 "error": "VULTR_API_KEY not configured",
                 "insight": "Vultr API Key not configured.", # For section_analysis fallback
                 "recommendations": ["Please configure VULTR_API_KEY in .env"], # For section_analysis fallback
@@ -46,18 +46,19 @@ class LLMService:
                 "key_strengths": [], # For strategic_overview fallback
                 "key_challenges": [] # For strategic_overview fallback
             }
+            return error_response, 0
 
-        headers = {
-            "Authorization": f"Bearer {VULTR_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {VULTR_API_KEY}",
+                   "Content-Type": "application/json",
+                   "Accept": "application/json"}
+
+        transport = httpx.AsyncHTTPTransport(http2=False)
+        async with httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60)) as client:
             try:
                 response = await client.post(
                     f"{VULTR_API_BASE_URL}/chat/completions",
                     json=payload,
                     headers=headers,
-                    timeout=60.0 # Increased timeout for potentially longer LLM responses
                 )
                 response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
                 result = response.json()
@@ -70,7 +71,7 @@ class LLMService:
                     error_details = e.response.json()
                 except json.JSONDecodeError:
                     error_details = e.response.text
-                return {
+                error_response = {
                     "error": "Vultr API HTTP error",
                     "status_code": e.response.status_code,
                     "details": error_details,
@@ -84,9 +85,10 @@ class LLMService:
                     "key_strengths": [],
                     "key_challenges": []
                 }
+                return error_response, 0
             except httpx.RequestError as e:
                 print(f"[LLM Service - Vultr] Request error: {e}")
-                return {
+                error_response = {
                      "error": "Vultr API Request error",
                      "details": str(e),
                     "insight": "Vultr API request error.",
@@ -98,6 +100,7 @@ class LLMService:
                     "key_strengths": [],
                     "key_challenges": []
                 }
+                return error_response, 0
 
 
     @staticmethod
@@ -200,6 +203,7 @@ Example JSON (if max_section_score was 9):
                         required_keys = {"insight", "recommendations", "score", "reasoning"}
                         if not required_keys.issubset(analysis.keys()):
                             raise ValueError(f"Missing one or more required keys in LLM JSON response. Got: {analysis.keys()}. Original response: {response_content_str}")
+                        analysis["token_usage"] = token_usage
                         return analysis
                     else:
                         raise ValueError(f"Could not find a valid JSON structure ({{...}}) in the LLM response. Response: '{response_content_str}'")
@@ -211,6 +215,8 @@ Example JSON (if max_section_score was 9):
             
         except Exception as e:
             print(f"[LLM Service - Vultr] General error in section analysis for '{section_name}': {e}")
+            # Initialize token_usage to 0 if not already set
+            token_usage = locals().get('token_usage', 0)
             return {
                 "insight": f"Unable to generate insight for {section_name} due to a processing error.",
                 "recommendations": ["Try again later.", "Review service logs."],
@@ -299,6 +305,7 @@ Example JSON (if max_section_score was 9):
                         required_keys = {"overview", "strategic_next_steps", "key_strengths", "key_challenges"}
                         if not required_keys.issubset(strategic_analysis.keys()):
                             raise ValueError(f"Missing one or more required keys in LLM JSON response for overview. Got: {strategic_analysis.keys()}. Original response: {response_content_str}")
+                        strategic_analysis["token_usage"] = token_usage
                         return strategic_analysis
                     else:
                         raise ValueError(f"Could not find a valid JSON structure ({{...}}) in the LLM response for overview. Response: '{response_content_str}'")
@@ -310,6 +317,8 @@ Example JSON (if max_section_score was 9):
             
         except Exception as e:
             print(f"[LLM Service - Vultr] General error in strategic overview generation for '{idea_name}': {e}")
+            # Initialize token_usage to 0 if not already set
+            token_usage = locals().get('token_usage', 0)
             return {
                 "overview": "Unable to generate strategic overview due to a processing error.",
                 "strategic_next_steps": ["Try again later.", "Review service logs."],

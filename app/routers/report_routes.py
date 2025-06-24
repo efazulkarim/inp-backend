@@ -12,6 +12,7 @@ import os
 import tempfile
 from app.services.llm_service import LLMService, VULTR_CHAT_MODEL
 from app.services.pdf_service import generate_report_pdf
+import asyncio
 
 router = APIRouter()
 
@@ -237,18 +238,23 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             db.commit()
             return
 
-        # Get linked customer personas
-        persona_links = db.query(IdeaPersonaLink).filter(
-            IdeaPersonaLink.idea_id == idea_id
-        ).all()
-        
+        # Get linked customer personas - make this optional
         linked_personas = []
-        for link in persona_links:
-            persona = db.query(CustomerPersona).filter(
-                CustomerPersona.id == link.persona_id
-            ).first()
-            if persona:
-                linked_personas.append(persona)
+        try:
+            persona_links = db.query(IdeaPersonaLink).filter(
+                IdeaPersonaLink.idea_id == idea_id
+            ).all()
+            
+            for link in persona_links:
+                persona = db.query(CustomerPersona).filter(
+                    CustomerPersona.id == link.persona_id
+                ).first()
+                if persona:
+                    linked_personas.append(persona)
+        except Exception as e:
+            # If persona linking fails (e.g., table doesn't exist), continue without personas
+            print(f"Warning: Could not load linked personas for idea {idea_id}: {str(e)}")
+            linked_personas = []
 
         # Group answers by section with max scores
         sections = {
@@ -265,14 +271,33 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             "feasibility": {"title": "Feasibility", "max_score": 10} # Last section has max_score 10
         }
 
-        # Process each section with LLM
+        # ------------------------------
+        # Run section analyses concurrently (speed!)
+        # ------------------------------
+         # Process each section with LLM
         section_analyses = []
         total_score = 0
 
+        # map section_key to questionnaire step number
+        step_map = {
+            "target_audience": 1,
+            "problem_identification": 2,
+            "consequence_of_not_solving": 3,
+            "articulate_solution": 4,
+            "before_after": 5,
+            "key_benefits": 6,
+            "market_opportunity": 7,
+            "competitive_advantage": 8,
+            "customer_adoption": 9,
+            "success_metrics": 10,
+            "feasibility": 11,
+        }
+
         for section_key, section_info in sections.items():
+            step_num = step_map[section_key]
             # Get questions and answers for this section
             section_questions = db.query(Questionnaire).filter(
-                Questionnaire.q_uuid.startswith(f"step_{section_key}_")
+                Questionnaire.q_uuid.startswith(f"step_{step_num}_")
             ).all()
 
             section_answers = [
@@ -280,14 +305,13 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 if answer.question_id in [q.id for q in section_questions]
             ]
 
-            # Generate analysis using LLM with persona context
+            # Generate analysis using LLM
             try:
                 analysis = await LLMService.generate_section_analysis(
                     section_info["title"],
                     [a.answer for a in section_answers],
                     [q.text for q in section_questions],
-                    section_info["max_score"], # Pass max_score for the section
-                    linked_personas  # Pass linked personas for context
+                    section_info["max_score"] # Pass max_score for the section
                 )
                 section_analyses.append({
                     "section": section_info["title"],
@@ -302,11 +326,10 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 # Log the error but continue with other sections
                 print(f"Error analyzing section {section_key}: {str(e)}")
 
-        # Generate strategic overview with persona context
+        # Generate strategic overview
         strategic_analysis = await LLMService.generate_strategic_overview(
             idea.idea_name,
-            section_analyses,
-            linked_personas  # Pass linked personas for context
+            section_analyses
         )
 
         # Save the report data

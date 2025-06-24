@@ -293,33 +293,40 @@ async def link_persona_to_idea(
     if not persona:
         raise HTTPException(status_code=404, detail="Customer persona not found")
     
-    # Check if link already exists
-    existing_link = db.query(IdeaPersonaLink).filter(
-        IdeaPersonaLink.idea_id == idea_id,
-        IdeaPersonaLink.persona_id == persona_link.persona_id
-    ).first()
-    
-    if existing_link:
-        raise HTTPException(status_code=400, detail="This persona is already linked to this idea")
-    
-    # Create the link
-    new_link = IdeaPersonaLink(
-        idea_id=idea_id,
-        persona_id=persona_link.persona_id,
-        user_id=current_user.id
-    )
-    
-    db.add(new_link)
-    db.commit()
-    db.refresh(new_link)
-    
-    return {
-        "id": new_link.id,
-        "idea_id": new_link.idea_id,
-        "persona_id": new_link.persona_id,
-        "persona_name": persona.persona_name,
-        "created_at": new_link.created_at
-    }
+    try:
+        # Check if link already exists
+        existing_link = db.query(IdeaPersonaLink).filter(
+            IdeaPersonaLink.idea_id == idea_id,
+            IdeaPersonaLink.persona_id == persona_link.persona_id
+        ).first()
+        
+        if existing_link:
+            raise HTTPException(status_code=400, detail="This persona is already linked to this idea")
+        
+        # Create the link
+        new_link = IdeaPersonaLink(
+            idea_id=idea_id,
+            persona_id=persona_link.persona_id,
+            user_id=current_user.id
+        )
+        
+        db.add(new_link)
+        db.commit()
+        db.refresh(new_link)
+        
+        return {
+            "id": new_link.id,
+            "idea_id": new_link.idea_id,
+            "persona_id": new_link.persona_id,
+            "persona_name": persona.persona_name,
+            "created_at": new_link.created_at
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # If persona linking fails (e.g., table doesn't exist), return an error
+        print(f"Error linking persona to idea: {str(e)}")
+        raise HTTPException(status_code=500, detail="Persona linking is not available at this time")
 
 @router.get("/ideas/{idea_id}/personas", response_model=schemas.IdeaPersonasResponse)
 async def get_idea_personas(
@@ -337,18 +344,23 @@ async def get_idea_personas(
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
     
-    # Get all linked personas
-    persona_links = db.query(IdeaPersonaLink).filter(
-        IdeaPersonaLink.idea_id == idea_id
-    ).all()
-    
+    # Get all linked personas - make this optional
     personas = []
-    for link in persona_links:
-        persona = db.query(CustomerPersona).filter(
-            CustomerPersona.id == link.persona_id
-        ).first()
-        if persona:
-            personas.append(persona)
+    try:
+        persona_links = db.query(IdeaPersonaLink).filter(
+            IdeaPersonaLink.idea_id == idea_id
+        ).all()
+        
+        for link in persona_links:
+            persona = db.query(CustomerPersona).filter(
+                CustomerPersona.id == link.persona_id
+            ).first()
+            if persona:
+                personas.append(persona)
+    except Exception as e:
+        # If persona linking fails (e.g., table doesn't exist), return empty list
+        print(f"Warning: Could not load linked personas for idea {idea_id}: {str(e)}")
+        personas = []
     
     return {
         "idea_id": idea_id,
@@ -372,17 +384,24 @@ async def unlink_persona_from_idea(
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
     
-    # Find and delete the link
-    link = db.query(IdeaPersonaLink).filter(
-        IdeaPersonaLink.idea_id == idea_id,
-        IdeaPersonaLink.persona_id == persona_id,
-        IdeaPersonaLink.user_id == current_user.id
-    ).first()
-    
-    if not link:
-        raise HTTPException(status_code=404, detail="Persona link not found")
-    
-    db.delete(link)
-    db.commit()
-    
-    return {"message": "Persona unlinked successfully"}
+    try:
+        # Find and delete the link
+        link = db.query(IdeaPersonaLink).filter(
+            IdeaPersonaLink.idea_id == idea_id,
+            IdeaPersonaLink.persona_id == persona_id,
+            IdeaPersonaLink.user_id == current_user.id
+        ).first()
+        
+        if not link:
+            raise HTTPException(status_code=404, detail="Persona link not found")
+        
+        db.delete(link)
+        db.commit()
+        
+        return {"message": "Persona unlinked successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        # If persona unlinking fails (e.g., table doesn't exist), return an error
+        print(f"Error unlinking persona from idea: {str(e)}")
+        raise HTTPException(status_code=500, detail="Persona unlinking is not available at this time")
