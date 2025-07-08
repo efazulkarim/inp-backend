@@ -20,6 +20,9 @@ from fastapi.responses import JSONResponse
 import json
 from typing import Optional
 from fastapi.security import HTTPBearer
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Robust .env loading (similar to llm_service.py)
 possible_env_paths = [
@@ -64,7 +67,8 @@ async def get_subscription_plans():
         plans = await SubscriptionService.get_all_subscription_plans()
         return SubscriptionPlanResponse(plans=plans)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error getting subscription plans: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not retrieve subscription plans. Please try again later.")
 
 @router.post("/create-checkout-session", response_model=SubscriptionCreationResponse)
 async def create_checkout_session(
@@ -115,7 +119,8 @@ async def create_checkout_session(
             checkout_url=session.url
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error creating checkout session for user {current_user.email}, price_id {price_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not create checkout session. Please try again later.")
 
 @router.post("/webhook")
 async def stripe_webhook(
@@ -276,7 +281,8 @@ async def cancel_subscription(
         
         return {"message": "Subscription canceled successfully"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error canceling subscription for user {current_user.email}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not cancel subscription. Please try again later.")
 
 @router.post("/create-portal-session", response_model=SubscriptionPortalResponse)
 async def create_portal_session(
@@ -295,7 +301,8 @@ async def create_portal_session(
 
         return SubscriptionPortalResponse(portal_url=session.url)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error creating portal session for user {current_user.email}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not create portal session. Please try again later.")
 
 @router.get("/subscription-status", response_model=SubscriptionStatus)
 async def get_subscription_status(
@@ -318,7 +325,8 @@ async def get_subscription_status(
             cancel_at_period_end=subscription_details["cancel_at_period_end"]
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error fetching subscription status for user {current_user.email}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not retrieve subscription status. Please try again later.")
 
 @router.post("/update-subscription")
 async def update_subscription(
@@ -334,12 +342,15 @@ async def update_subscription(
             db=db
         )
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as ve: # Specific exception for user not found or invalid plan
+        logger.warning(f"ValueError during subscription update for user {current_user.email}, price_id {update_request.price_id}: {ve}")
+        raise HTTPException(status_code=404, detail=str(ve)) # Can expose str(ve) as it's a custom message
+    except stripe.error.StripeError as se:
+        logger.error(f"StripeError during subscription update for user {current_user.email}, price_id {update_request.price_id}: {se}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Stripe error: {se.user_message or 'Could not process payment or update.'}")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Unexpected error during subscription update for user {current_user.email}, price_id {update_request.price_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not update subscription. Please try again later.")
 
 async def send_invoice_email(user_email: str, amount: float, currency: str, subscription_plan: str):
     """

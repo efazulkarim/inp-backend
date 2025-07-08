@@ -47,17 +47,30 @@ origins = [
 ]
 
 # For development, you can also use a wildcard
-if os.getenv("ENVIRONMENT") == "production":
-    origins = ["*"]
+# Make sure to list your specific frontend origins for production.
+# Using ["*"] in production is a security risk.
+# if os.getenv("ENVIRONMENT") == "production":
+# origins = ["*"] # This is dangerous for production
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins, # Ensure this list is correctly configured for your environments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]  # Allow frontend to read custom headers
 )
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY" # Redundant if CSP frame-ancestors is used, but good for older browsers
+    # Optional: Strict-Transport-Security (ensure your app is HTTPS-only first)
+    # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 @app.get("/")
 def read_root():

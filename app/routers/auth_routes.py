@@ -70,7 +70,8 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
     except Exception as e:
         logger.error(f"[Google Callback] Error authorizing access token: {e}")
         logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"OAuth authorization failed: {str(e)}")
+        # Avoid leaking raw exception details to the client
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth authorization failed. Please try again or contact support if the issue persists.")
 
     try:
         user_info_google = token.get('userinfo')
@@ -96,7 +97,8 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
         logger.error(f"[Google Callback] Error processing user information: {e}")
         logger.error(f"[Google Callback] Full token at error: {token}") # Log token for debugging
         logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to process user information: {str(e)}")
+        # Avoid leaking raw exception details to the client
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to process user information. Please try again or contact support if the issue persists.")
 
     # Check if user exists, else create
     db_user = db.query(models.User).filter(models.User.email == email).first()
@@ -107,7 +109,7 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
             username=user_info_google.get('email', '').split('@')[0], # Use email part as username
             first_name=user_info_google.get('given_name', ''),
             last_name=user_info_google.get('family_name', ''),
-            password="",  # No password for OAuth users, or generate a random one if your model requires it
+            password=auth.hash_password(os.urandom(16).hex()),  # Set a strong, random password for OAuth users
             verified=True # Assume email is verified by Google
         )
         db.add(db_user)
@@ -220,3 +222,12 @@ def reset_password(request: schemas.ResetPassword, db: Session = Depends(get_db)
     
     # Return success message
     return {"msg": "Password has been reset successfully. You can now log in with your new password."}
+
+# Debug endpoint - consider removing or protecting in production
+# @router.get("/debug-oauth")
+# async def debug_oauth():
+#     return {
+#         "frontend_url": os.getenv('FRONTEND_URL'),
+#         "google_redirect_uri": os.getenv('GOOGLE_REDIRECT_URI'),
+#         "environment": os.getenv('ENVIRONMENT')
+#     }

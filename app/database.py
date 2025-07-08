@@ -32,10 +32,13 @@ if not SQLALCHEMY_DATABASE_URL:
     print("[app/database.py] CRITICAL ERROR: DATABASE_URL environment variable not set after attempting to load .env.")
     # Potentially raise an error or use a default for local dev if absolutely necessary,
     # but for deployment, it should always be set.
+    # Potentially raise an error or use a default for local dev if absolutely necessary,
+    # but for deployment, it should always be set.
     # For now, let's keep the previous hardcoded one as an ultimate fallback for safety,
     # but with a strong warning if it's used.
-    SQLALCHEMY_DATABASE_URL = "mysql+mysqlconnector://root:%2B1826%2BDark@localhost:3306/inp" # Fallback
-    print(f"[app/database.py] WARNING: Using HARDCODED FALLBACK DATABASE_URL: {SQLALCHEMY_DATABASE_URL}")
+    # SQLALCHEMY_DATABASE_URL = "mysql+mysqlconnector://root:%2B1826%2BDark@localhost:3306/inp" # Fallback
+    # print(f"[app/database.py] WARNING: Using HARDCODED FALLBACK DATABASE_URL: {SQLALCHEMY_DATABASE_URL}")
+    raise ValueError("CRITICAL ERROR: DATABASE_URL environment variable not set. Application cannot start.")
 else:
     print(f"[app/database.py] ✅ Using DATABASE_URL from environment (loaded from {env_path_loaded if env_path_loaded else 'system env'}).")
 
