@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, validator, root_validator
+from pydantic import BaseModel, EmailStr, validator, root_validator, Field, constr
 from typing import Optional, Dict, Any, List, Union
 from datetime import datetime
+import re
 
 # Schema for user registration
 class UserBase(BaseModel):
@@ -10,7 +11,29 @@ class UserBase(BaseModel):
     last_name: Optional[str] = None
 
 class UserCreate(UserBase):
-    password: str
+    password: constr(min_length=8, max_length=128)
+    
+    @validator('password')
+    def validate_password_strength(cls, v):
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character')
+        return v
+    
+    @validator('username')
+    def validate_username(cls, v):
+        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
+            raise ValueError('Username can only contain letters, numbers, hyphens, and underscores')
+        if len(v) < 3:
+            raise ValueError('Username must be at least 3 characters long')
+        if len(v) > 30:
+            raise ValueError('Username cannot exceed 30 characters')
+        return v
 
 class UserDisplay(UserBase):
     id: int
@@ -36,9 +59,17 @@ class Token(BaseModel):
     refresh_token: Optional[str] = None
 
 class IdeaCreate(BaseModel):
-    idea_name: str
-    idea_description: Optional[str] = None
-    pin: Optional[int] = None
+    idea_name: constr(min_length=3, max_length=200, strip_whitespace=True)
+    idea_description: Optional[constr(max_length=2000, strip_whitespace=True)] = None
+    pin: Optional[int] = Field(None, ge=0, le=1)
+    
+    @validator('idea_name')
+    def validate_idea_name(cls, v):
+        if not v or v.isspace():
+            raise ValueError('Idea name cannot be empty or only whitespace')
+        # Remove potentially harmful characters
+        cleaned = re.sub(r'[<>"\']', '', v)
+        return cleaned
 
 class IdeaResponse(IdeaCreate):
     id: int
@@ -156,8 +187,20 @@ class ForgotPassword(BaseModel):
     email: EmailStr
 
 class ResetPassword(BaseModel):
-    token: str
-    new_password: str
+    token: constr(min_length=1, max_length=500)
+    new_password: constr(min_length=8, max_length=128)
+    
+    @validator('new_password')
+    def validate_password_strength(cls, v):
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character')
+        return v
 
 # New schemas for improved ideaboard API
 class QuestionData(BaseModel):

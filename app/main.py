@@ -1,54 +1,99 @@
 # app/main.py
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI
+import secrets
+import time
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+
 from app.database import engine, Base
 from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes, customerboard_routes, stripe_routes
-from starlette.middleware.sessions import SessionMiddleware
-import secrets
+from app.api.health import router as health_router
+from app.core.config import get_settings
+from app.core.logging import setup_logging, CorrelationIDMiddleware, get_logger
+from app.core.exceptions import (
+    app_exception_handler, validation_exception_handler, 
+    http_exception_handler, general_exception_handler,
+    AppException, ValidationError
+)
+from app.core.database_monitoring import setup_query_monitoring
+from app.core.metrics import metrics_scheduler, app_metrics, get_metrics_summary
+from app.middleware.security import (
+    SecurityHeadersMiddleware, 
+    RequestSanitizationMiddleware, 
+    RateLimitingMiddleware,
+    get_security_middleware_config
+)
+from fastapi import HTTPException
 
-# Robust .env loading (similar to Stripe Routes)
-possible_env_paths = [
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'),  # project root
-    os.path.join(os.path.dirname(__file__), '.env'),  # app directory
-    '.env'  # current working directory
-]
-env_found = False
-for env_path in possible_env_paths:
-    if os.path.exists(env_path):
-        print(f"[main.py] 💡 Found .env file at: {env_path}")
-        load_dotenv(dotenv_path=env_path)
-        env_found = True
-        break
-if not env_found:
-    print("[main.py] ⚠️ WARNING: No .env file found in any standard location!")
+# Initialize configuration and logging
+settings = get_settings()
+setup_logging(settings.log_level, settings.log_format)
+logger = get_logger(__name__)
 
-app = FastAPI()
+app = FastAPI(
+    title="InsightPilot API",
+    description="API for InsightPilot idea management platform",
+    version="1.0.0",
+    debug=settings.debug
+)
+
+# Setup database query monitoring
+setup_query_monitoring(engine)
+
+# Get security middleware configuration
+security_config = get_security_middleware_config()
+
+# Add security middleware (order matters - add from innermost to outermost)
+app.add_middleware(
+    RateLimitingMiddleware,
+    config=security_config["rate_limiting"]
+)
+
+app.add_middleware(
+    RequestSanitizationMiddleware,
+    config=security_config["sanitization"]
+)
+
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    config=security_config["security_headers"]
+)
+
+# Add correlation ID middleware for request tracking
+app.add_middleware(CorrelationIDMiddleware)
+
+# Add request metrics middleware
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Middleware to collect request metrics."""
+    start_time = time.time()
+    
+    response = await call_next(request)
+    
+    # Record request metrics
+    duration = time.time() - start_time
+    app_metrics.record_request(
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        duration=duration
+    )
+    
+    return response
 
 # Add SessionMiddleware for OAuth (required by Authlib)
-SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY") or secrets.token_urlsafe(32)
+SESSION_SECRET_KEY = settings.session_secret_key or secrets.token_urlsafe(32)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
 # CORS middleware configuration
-origins = [
-    "http://localhost",
-    "https://app.insightpilot.co",
-    "https://inp-dashboard.netlify.app",
-    "http://localhost:3000",  # React development server
-    "http://127.0.0.1",
-    "http://127.0.0.1:3000",
-    "https://localhost",
-    "https://localhost:3000",
-    # Production URLs - REPLACE THESE WITH YOUR ACTUAL DOMAINS
-    "https://www.yourdomain.com",
-    "https://app.yourdomain.com",
-    # Add any other origins your frontend might be served from
-]
-
-# For development, you can also use a wildcard
-if os.getenv("ENVIRONMENT") == "production":
-    origins = ["*"]
+origins = settings.allowed_origins
+if settings.is_production:
+    # In production, use configured origins only
+    pass
+else:
+    # In development, allow additional origins
+    origins.extend(["*"])
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,16 +101,58 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"]  # Allow frontend to read custom headers
+    expose_headers=["*", "x-correlation-id"]  # Allow frontend to read correlation ID
 )
+
+# Add exception handlers
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(ValidationError, validation_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+@app.on_event("startup")
+async def startup_event():
+    """Application startup event."""
+    logger.info("Starting InsightPilot API...")
+    
+    # Start metrics collection
+    metrics_scheduler.start()
+    
+    logger.info("InsightPilot API started successfully")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Application shutdown event."""
+    logger.info("Shutting down InsightPilot API...")
+    
+    # Stop metrics collection
+    metrics_scheduler.stop()
+    
+    logger.info("InsightPilot API shutdown complete")
+
 
 @app.get("/")
 def read_root():
-    return {"message": "API is running!"}
+    return {
+        "message": "InsightPilot API is running!",
+        "version": "1.0.0",
+        "environment": settings.environment,
+        "status": "healthy"
+    }
+
+
+@app.get("/metrics")
+def get_application_metrics():
+    """Get application metrics (for monitoring)."""
+    return get_metrics_summary()
 
 # Comment out automatic table creation to avoid conflicts with Alembic migrations
 # Use Alembic migrations instead for database schema management
 # Base.metadata.create_all(bind=engine)
+
+# Include health check routes
+app.include_router(health_router, prefix="/health", tags=["health"])
 
 # Include the authentication and user routes
 app.include_router(auth_routes.router, prefix="/auth", tags=["auth"])
@@ -82,7 +169,7 @@ app.include_router(stripe_routes.router, prefix="/api/stripe", tags=["stripe"])
 @auth_routes.router.get("/debug-oauth")
 async def debug_oauth():
     return {
-        "frontend_url": os.getenv('FRONTEND_URL'),
-        "google_redirect_uri": os.getenv('GOOGLE_REDIRECT_URI'),
-        "environment": os.getenv('ENVIRONMENT')
+        "frontend_url": settings.frontend_url,
+        "google_redirect_uri": settings.google_redirect_uri,
+        "environment": settings.environment
     }
