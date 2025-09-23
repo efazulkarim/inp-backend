@@ -95,7 +95,7 @@ class QuestionnaireService(BaseService):
         """Get all answers for a questionnaire."""
         try:
             # Verify questionnaire exists
-            questionnaire = self.get_questionnaire_by_id(questionnaire_id)
+            self.get_questionnaire_by_id(questionnaire_id)
             
             return self.answer_repo.get_by_questionnaire_id(questionnaire_id)
         except Exception as e:
@@ -106,7 +106,7 @@ class QuestionnaireService(BaseService):
         """Create a new answer."""
         try:
             # Verify questionnaire exists
-            questionnaire = self.get_questionnaire_by_id(answer_data.questionnaire_id)
+            self.get_questionnaire_by_id(answer_data.questionnaire_id)
             
             # Validate answer data
             self._validate_answer_data(answer_data)
@@ -136,8 +136,8 @@ class QuestionnaireService(BaseService):
     def update_answer(self, answer_id: int, answer_data: AnswerUpdate) -> Answer:
         """Update an existing answer."""
         try:
-            # Get existing answer
-            answer = self.get_answer_by_id(answer_id)
+            # Verify answer exists
+            self.get_answer_by_id(answer_id)
             
             # Validate update data
             self._validate_answer_update_data(answer_data)
@@ -156,7 +156,7 @@ class QuestionnaireService(BaseService):
         """Delete an answer."""
         try:
             # Verify answer exists
-            answer = self.get_answer_by_id(answer_id)
+            self.get_answer_by_id(answer_id)
             
             # Delete answer
             success = self.answer_repo.delete(answer_id)
