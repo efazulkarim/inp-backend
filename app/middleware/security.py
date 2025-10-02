@@ -9,7 +9,7 @@ import json
 import hashlib
 from typing import Dict, Any, Optional, Set
 from fastapi import Request, Response, HTTPException
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from app.core.logging import get_logger
 from app.core.config import get_settings
@@ -35,10 +35,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
             "Content-Security-Policy": (
                 "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data: https:; "
-                "font-src 'self' data:; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https: blob:; "
+                "font-src 'self' data: https:; "
                 "connect-src 'self'; "
                 "frame-ancestors 'none'"
             )
@@ -46,6 +46,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
+        
+        # Skip security headers for Swagger UI documentation
+        if request.url.path.startswith("/docs") or request.url.path.startswith("/redoc"):
+            return response
         
         # Add security headers
         for header, value in self.default_headers.items():
@@ -329,7 +333,7 @@ def get_security_middleware_config() -> Dict[str, Any]:
             "X-Frame-Options": "DENY",
             "X-XSS-Protection": "1; mode=block",
             "Referrer-Policy": "strict-origin-when-cross-origin",
-            "Strict-Transport-Security": "max-age=31536000; includeSubDomains" if settings.ENVIRONMENT == "production" else None,
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains" if settings.environment == "production" else None,
         },
         "sanitization": {
             "max_request_size": 10 * 1024 * 1024,  # 10MB
