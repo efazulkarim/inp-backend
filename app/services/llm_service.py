@@ -15,93 +15,128 @@ possible_env_paths = [
 env_found = False
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"[LLM Service] 💡 Found .env file at: {env_path}")
+        print(f"[LLM Service] Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
         env_found = True
         break
 if not env_found:
     print("[LLM Service] ⚠️ WARNING: No .env file found!")
 
-# Vultr API Configuration
+# LLM Provider Configuration
+GLM_API_KEY = os.getenv("GLM_API_KEY")
+GLM_API_BASE_URL = "https://api.z.ai/api/coding/paas/v4"
+GLM_CHAT_MODEL = os.getenv("GLM_CHAT_MODEL", "glm-4.5")  # glm-5 requires Max plan
+
 VULTR_API_KEY = os.getenv("VULTR_API_KEY")
 VULTR_API_BASE_URL = "https://api.vultrinference.com/v1"
 VULTR_CHAT_MODEL = "deepseek-r1-distill-qwen-32b"
-# print(f"[LLM Service] Vultr API Key found: {'Yes' if VULTR_API_KEY else 'No'}")
+
+# Active provider: prefer GLM when key is set, else Vultr
+USE_GLM = bool(GLM_API_KEY)
+ACTIVE_API_KEY = GLM_API_KEY if USE_GLM else VULTR_API_KEY
+ACTIVE_API_BASE_URL = GLM_API_BASE_URL if USE_GLM else VULTR_API_BASE_URL
+ACTIVE_CHAT_MODEL = GLM_CHAT_MODEL if USE_GLM else VULTR_CHAT_MODEL
+PROVIDER_NAME = "GLM" if USE_GLM else "Vultr"
+
+
+def _get_error_response(
+    error: str,
+    insight: str = "",
+    recommendations: list | None = None,
+    overview: str = "",
+    strategic_next_steps: list | None = None,
+    key_strengths: list | None = None,
+    key_challenges: list | None = None,
+    reasoning: str = "",
+) -> Dict[str, Any]:
+    """Build a consistent error response structure for both section_analysis and strategic_overview."""
+    return {
+        "error": error,
+        "insight": insight or f"{PROVIDER_NAME} API error.",
+        "recommendations": recommendations or ["Try again later."],
+        "score": 0,
+        "reasoning": reasoning or error,
+        "overview": overview or f"{PROVIDER_NAME} API error.",
+        "strategic_next_steps": strategic_next_steps or ["Try again later."],
+        "key_strengths": key_strengths or [],
+        "key_challenges": key_challenges or [],
+    }
+
 
 class LLMService:
     @staticmethod
-    async def _make_vultr_request(payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
-        """Helper method to make requests to Vultr API"""
-        if not VULTR_API_KEY:
-            print("[LLM Service - Vultr] CRITICAL ERROR: VULTR_API_KEY not found.")
-            # Return a structure that matches an error response from the main methods
-            error_response = {
-                "error": "VULTR_API_KEY not configured",
-                "insight": "Vultr API Key not configured.", # For section_analysis fallback
-                "recommendations": ["Please configure VULTR_API_KEY in .env"], # For section_analysis fallback
-                "score": 0, # For section_analysis fallback
-                "reasoning": "API Key missing.", # For section_analysis fallback
-                "overview": "Vultr API Key not configured.", # For strategic_overview fallback
-                "strategic_next_steps": ["Please configure VULTR_API_KEY in .env"], # For strategic_overview fallback
-                "key_strengths": [], # For strategic_overview fallback
-                "key_challenges": [] # For strategic_overview fallback
-            }
+    async def _make_chat_request(payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+        """Make chat completion request to the active LLM provider (GLM or Vultr)."""
+        if not ACTIVE_API_KEY:
+            key_name = "GLM_API_KEY" if USE_GLM else "VULTR_API_KEY"
+            print(f"[LLM Service - {PROVIDER_NAME}] CRITICAL ERROR: {key_name} not found.")
+            error_response = _get_error_response(
+                error=f"{key_name} not configured",
+                insight=f"{PROVIDER_NAME} API Key not configured.",
+                recommendations=[f"Please configure {key_name} in .env"],
+                reasoning="API Key missing.",
+                overview=f"{PROVIDER_NAME} API Key not configured.",
+                strategic_next_steps=[f"Please configure {key_name} in .env"],
+            )
             return error_response, 0
 
-        headers = {"Authorization": f"Bearer {VULTR_API_KEY}",
-                   "Content-Type": "application/json",
-                   "Accept": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {ACTIVE_API_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        # GLM requires stream: false for non-streaming; Vultr accepts it
+        request_payload = {**payload, "stream": False}
+        if USE_GLM:
+            request_payload["max_tokens"] = request_payload.get("max_tokens", 2048)
 
         transport = httpx.AsyncHTTPTransport(http2=False)
         async with httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60)) as client:
             try:
                 response = await client.post(
-                    f"{VULTR_API_BASE_URL}/chat/completions",
-                    json=payload,
+                    f"{ACTIVE_API_BASE_URL}/chat/completions",
+                    json=request_payload,
                     headers=headers,
                 )
-                response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+                response.raise_for_status()
                 result = response.json()
                 token_usage = result.get("usage", {}).get("total_tokens", 0)
                 return result, token_usage
             except httpx.HTTPStatusError as e:
-                print(f"[LLM Service - Vultr] HTTP error: {e.response.status_code} - {e.response.text}")
-                # Try to parse error response from Vultr if available
+                print(f"[LLM Service - {PROVIDER_NAME}] HTTP error: {e.response.status_code} - {e.response.text}")
                 try:
                     error_details = e.response.json()
                 except json.JSONDecodeError:
                     error_details = e.response.text
-                error_response = {
-                    "error": "Vultr API HTTP error",
-                    "status_code": e.response.status_code,
-                    "details": error_details,
-                    # Fallback fields for direct use by calling methods
-                    "insight": f"Vultr API HTTP error {e.response.status_code}.",
-                    "recommendations": ["Check Vultr API status and your request."],
-                    "score": 0,
-                    "reasoning": f"HTTP {e.response.status_code}",
-                    "overview": f"Vultr API HTTP error {e.response.status_code}.",
-                    "strategic_next_steps": ["Check Vultr API status and your request."],
-                    "key_strengths": [],
-                    "key_challenges": []
-                }
+                error_response = _get_error_response(
+                    error=f"{PROVIDER_NAME} API HTTP error",
+                    insight=f"{PROVIDER_NAME} API HTTP error {e.response.status_code}.",
+                    recommendations=["Check API status and your request."],
+                    reasoning=f"HTTP {e.response.status_code}",
+                    overview=f"{PROVIDER_NAME} API HTTP error {e.response.status_code}.",
+                    strategic_next_steps=["Check API status and your request."],
+                )
+                error_response["status_code"] = e.response.status_code
+                error_response["details"] = error_details
                 return error_response, 0
             except httpx.RequestError as e:
-                print(f"[LLM Service - Vultr] Request error: {e}")
-                error_response = {
-                     "error": "Vultr API Request error",
-                     "details": str(e),
-                    "insight": "Vultr API request error.",
-                    "recommendations": ["Check network or Vultr service status."],
-                    "score": 0,
-                    "reasoning": "Request Error",
-                    "overview": "Vultr API request error.",
-                    "strategic_next_steps": ["Check network or Vultr service status."],
-                    "key_strengths": [],
-                    "key_challenges": []
-                }
+                print(f"[LLM Service - {PROVIDER_NAME}] Request error: {e}")
+                error_response = _get_error_response(
+                    error=f"{PROVIDER_NAME} API Request error",
+                    insight=f"{PROVIDER_NAME} API request error.",
+                    recommendations=["Check network or service status."],
+                    reasoning="Request Error",
+                    overview=f"{PROVIDER_NAME} API request error.",
+                    strategic_next_steps=["Check network or service status."],
+                )
+                error_response["details"] = str(e)
                 return error_response, 0
 
+    @staticmethod
+    async def _make_vultr_request(payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+        """Deprecated: use _make_chat_request. Kept for backward compatibility."""
+        return await LLMService._make_chat_request(payload)
 
     @staticmethod
     async def generate_section_analysis(
@@ -161,7 +196,7 @@ Example JSON (if max_section_score was 9):
             user_content_parts.append("")
         
         vultr_payload = {
-            "model": VULTR_CHAT_MODEL,
+            "model": ACTIVE_CHAT_MODEL,
             "messages": [
                 {"role": "system", "content": system_message_content},
                 {"role": "user", "content": "\\n".join(user_content_parts)}
@@ -172,11 +207,11 @@ Example JSON (if max_section_score was 9):
         }
 
         try:
-            print(f"[LLM Service - Vultr] Sending request for section '{section_name}' to {VULTR_CHAT_MODEL}...")
-            api_response, token_usage = await LLMService._make_vultr_request(vultr_payload)
+            print(f"[LLM Service - {PROVIDER_NAME}] Sending request for section '{section_name}' to {ACTIVE_CHAT_MODEL}...")
+            api_response, token_usage = await LLMService._make_chat_request(vultr_payload)
             
             if "error" in api_response: # Check if helper returned an error structure
-                print(f"[LLM Service - Vultr] Error in section analysis for '{section_name}': {api_response.get('details', api_response.get('error'))}")
+                print(f"[LLM Service - {PROVIDER_NAME}] Error in section analysis for '{section_name}': {api_response.get('details', api_response.get('error'))}")
                 return { # Fallback response matching expected structure
                     "insight": api_response.get("insight", f"Unable to generate insight for {section_name} due to an API error."),
                     "recommendations": api_response.get("recommendations", ["Try again later."]),
@@ -185,7 +220,7 @@ Example JSON (if max_section_score was 9):
                     "token_usage": token_usage
                 }
 
-            print(f"[LLM Service - Vultr] Received response from {VULTR_CHAT_MODEL} for section '{section_name}'.")
+            print(f"[LLM Service - {PROVIDER_NAME}] Received response from {ACTIVE_CHAT_MODEL} for section '{section_name}'.")
             
             # Assuming Vultr response structure: response['choices'][0]['message']['content']
             response_content_str = api_response.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -208,20 +243,20 @@ Example JSON (if max_section_score was 9):
                     else:
                         raise ValueError(f"Could not find a valid JSON structure ({{...}}) in the LLM response. Response: '{response_content_str}'")
                 except json.JSONDecodeError as je:
-                    print(f"[LLM Service - Vultr] JSONDecodeError for section '{section_name}': {je}. Response: '{response_content_str}'")
-                    raise ValueError(f"Failed to decode JSON from Vultr for section '{section_name}'. Content: {response_content_str}")
+                    print(f"[LLM Service - {PROVIDER_NAME}] JSONDecodeError for section '{section_name}': {je}. Response: '{response_content_str}'")
+                    raise ValueError(f"Failed to decode JSON from {PROVIDER_NAME} for section '{section_name}'. Content: {response_content_str}")
             else:
-                raise ValueError(f"Empty response content from Vultr for section '{section_name}'. Full API response: {api_response}")
+                raise ValueError(f"Empty response content from {PROVIDER_NAME} for section '{section_name}'. Full API response: {api_response}")
             
         except Exception as e:
-            print(f"[LLM Service - Vultr] General error in section analysis for '{section_name}': {e}")
+            print(f"[LLM Service - {PROVIDER_NAME}] General error in section analysis for '{section_name}': {e}")
             # Initialize token_usage to 0 if not already set
             token_usage = locals().get('token_usage', 0)
             return {
                 "insight": f"Unable to generate insight for {section_name} due to a processing error.",
                 "recommendations": ["Try again later.", "Review service logs."],
                 "score": 0,
-                "reasoning": "Error in Vultr analysis processing.",
+                "reasoning": f"Error in {PROVIDER_NAME} analysis processing.",
                 "token_usage": token_usage
             }
 
@@ -266,7 +301,7 @@ Example JSON (if max_section_score was 9):
         user_prompt = "\\n".join(user_content_parts)
         
         vultr_payload = {
-            "model": VULTR_CHAT_MODEL,
+            "model": ACTIVE_CHAT_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt_content},
                 {"role": "user", "content": user_prompt}
@@ -275,11 +310,11 @@ Example JSON (if max_section_score was 9):
         }
 
         try:
-            print(f"[LLM Service - Vultr] Sending strategic overview request for '{idea_name}' to {VULTR_CHAT_MODEL}...")
-            api_response, token_usage = await LLMService._make_vultr_request(vultr_payload)
+            print(f"[LLM Service - {PROVIDER_NAME}] Sending strategic overview request for '{idea_name}' to {ACTIVE_CHAT_MODEL}...")
+            api_response, token_usage = await LLMService._make_chat_request(vultr_payload)
 
             if "error" in api_response: # Check if helper returned an error structure
-                print(f"[LLM Service - Vultr] Error in strategic overview for '{idea_name}': {api_response.get('details', api_response.get('error'))}")
+                print(f"[LLM Service - {PROVIDER_NAME}] Error in strategic overview for '{idea_name}': {api_response.get('details', api_response.get('error'))}")
                 return { # Fallback response matching expected structure
                     "overview": api_response.get("overview", "Unable to generate strategic overview due to an API error."),
                     "strategic_next_steps": api_response.get("strategic_next_steps", ["Try again later."]),
@@ -288,7 +323,7 @@ Example JSON (if max_section_score was 9):
                     "token_usage": token_usage
                 }
 
-            print(f"[LLM Service - Vultr] Received strategic overview response from {VULTR_CHAT_MODEL}.")
+            print(f"[LLM Service - {PROVIDER_NAME}] Received strategic overview response from {ACTIVE_CHAT_MODEL}.")
             
             response_content_str = api_response.get("choices", [{}])[0].get("message", {}).get("content", "")
 
@@ -310,13 +345,13 @@ Example JSON (if max_section_score was 9):
                     else:
                         raise ValueError(f"Could not find a valid JSON structure ({{...}}) in the LLM response for overview. Response: '{response_content_str}'")
                 except json.JSONDecodeError as je:
-                    print(f"[LLM Service - Vultr] JSONDecodeError for strategic overview '{idea_name}': {je}. Response: {response_content_str}")
-                    raise ValueError(f"Failed to decode JSON from Vultr for strategic overview '{idea_name}'. Content: {response_content_str}")
+                    print(f"[LLM Service - {PROVIDER_NAME}] JSONDecodeError for strategic overview '{idea_name}': {je}. Response: {response_content_str}")
+                    raise ValueError(f"Failed to decode JSON from {PROVIDER_NAME} for strategic overview '{idea_name}'. Content: {response_content_str}")
             else:
-                raise ValueError(f"Empty response content for strategic overview from Vultr for '{idea_name}'. Full API response: {api_response}")
+                raise ValueError(f"Empty response content for strategic overview from {PROVIDER_NAME} for '{idea_name}'. Full API response: {api_response}")
             
         except Exception as e:
-            print(f"[LLM Service - Vultr] General error in strategic overview generation for '{idea_name}': {e}")
+            print(f"[LLM Service - {PROVIDER_NAME}] General error in strategic overview generation for '{idea_name}': {e}")
             # Initialize token_usage to 0 if not already set
             token_usage = locals().get('token_usage', 0)
             return {

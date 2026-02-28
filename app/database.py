@@ -16,7 +16,7 @@ possible_env_paths = [
 env_path_loaded = None
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"[app/database.py] 💡 Found .env file at: {env_path}")
+        print(f"[app/database.py] Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
         env_path_loaded = env_path
         break
@@ -26,6 +26,13 @@ if not env_path_loaded:
 # else:
     # print(f"[app/database.py] Loaded .env from: {env_path_loaded}") # Optional debug confirmation
 
+# DATABASE_URL should be set in .env file
+# For Kubernetes/production: Use the internal service DNS (e.g., *.svc.cluster.local)
+# For local development: Use either:
+#   1. External/public connection string from your cloud provider
+#   2. Port-forwarded connection: postgresql://inp:inp1717@localhost:5432/inp-backend
+#      (after running: kubectl port-forward -n archer-yfkkc svc/archer-yfkkc-postgresql 5432:5432)
+#   3. A VPN/tunnel connection to your cluster
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not SQLALCHEMY_DATABASE_URL:
@@ -40,7 +47,7 @@ if not SQLALCHEMY_DATABASE_URL:
     # print(f"[app/database.py] WARNING: Using HARDCODED FALLBACK DATABASE_URL: {SQLALCHEMY_DATABASE_URL}")
     raise ValueError("CRITICAL ERROR: DATABASE_URL environment variable not set. Application cannot start.")
 else:
-    print(f"[app/database.py] ✅ Using DATABASE_URL from environment (loaded from {env_path_loaded if env_path_loaded else 'system env'}).")
+    print(f"[app/database.py] Using DATABASE_URL from environment (loaded from {env_path_loaded if env_path_loaded else 'system env'}).")
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

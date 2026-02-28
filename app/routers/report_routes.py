@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 import os
 import tempfile
-from app.services.llm_service import LLMService, VULTR_CHAT_MODEL
+from app.services.llm_service import LLMService, ACTIVE_CHAT_MODEL, PROVIDER_NAME
 from app.services.pdf_service import generate_report_pdf
 import asyncio
 
@@ -372,64 +372,64 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
 # Simple test endpoint for LLM
 @router.get("/test-llm")
 async def test_llm_connection():
-    """Test if the LLM connection (now Vultr) is working properly"""
+    """Test if the LLM connection (GLM or Vultr) is working properly"""
     try:
-        api_key = os.getenv("VULTR_API_KEY")
+        api_key = os.getenv("GLM_API_KEY") or os.getenv("VULTR_API_KEY")
         if not api_key:
             return {
                 "status": "error",
-                "message": "VULTR_API_KEY environment variable not found or empty",
-                "hint": "Make sure to add VULTR_API_KEY to your .env file or environment variables"
+                "message": "No LLM API key found. Set GLM_API_KEY or VULTR_API_KEY in .env",
+                "hint": "Add GLM_API_KEY (for GLM Coding Plan) or VULTR_API_KEY (for Vultr) to your .env file"
             }
-            
+
         result = await LLMService.generate_strategic_overview(
-            "Test Product for Vultr",
+            "Test Product",
             [
                 {
-                    "section": "Test Section for Vultr",
+                    "section": "Test Section",
                     "score": 10,
-                    "insight": "This is a test insight for Vultr.",
-                    "recommendations": ["Vultr test recommendation 1", "Vultr test recommendation 2"]
+                    "insight": "This is a test insight.",
+                    "recommendations": ["Test recommendation 1", "Test recommendation 2"]
                 }
             ]
         )
-        
-        overview_text = result.get("overview", "").lower() # Get overview safely and lowercase it
 
-        # More explicit check for error indicators in the overview
+        overview_text = result.get("overview", "").lower()
+
         has_known_error_in_overview = (
-            overview_text == "vultr api key not configured."
-            or overview_text.startswith("vultr api http error") 
-            or overview_text.startswith("vultr api request error")
+            overview_text == f"{PROVIDER_NAME.lower()} api key not configured."
+            or overview_text.startswith(f"{PROVIDER_NAME.lower()} api http error")
+            or overview_text.startswith(f"{PROVIDER_NAME.lower()} api request error")
             or overview_text == "unable to generate strategic overview due to an api error."
             or overview_text == "unable to generate strategic overview due to a processing error."
         )
 
         is_successful_llm_response = (
-            result 
-            and "error" not in result # No explicit 'error' key from our _make_vultr_request helper
-            and result.get("overview") # Overview field must exist
+            result
+            and "error" not in result
+            and result.get("overview")
             and not has_known_error_in_overview
-            and len(result.get("strategic_next_steps", [])) > 0 # Heuristic for actual content
+            and len(result.get("strategic_next_steps", [])) > 0
         )
 
         if is_successful_llm_response:
             return {
                 "status": "success",
-                "message": "Vultr LLM connection is working correctly and generated a valid response.",
+                "message": f"{PROVIDER_NAME} LLM connection is working correctly and generated a valid response.",
                 "sample_response": result,
-                "model_used": VULTR_CHAT_MODEL
+                "model_used": ACTIVE_CHAT_MODEL,
+                "provider": PROVIDER_NAME
             }
         else:
             return {
                 "status": "error",
-                "message": "Vultr LLM API call was made, but returned an error or an unexpected/fallback response.",
+                "message": f"{PROVIDER_NAME} LLM API call was made, but returned an error or an unexpected/fallback response.",
                 "response": result,
-                "hint": "Check your VULTR_API_KEY, Vultr account status (billing, quotas), selected model ID ('{}'), and Vultr API status. The response above might contain more details from Vultr. Error 422 often means the request data was unprocessable (e.g. invalid model or parameters).".format(VULTR_CHAT_MODEL)
+                "hint": f"Check your API key, {PROVIDER_NAME} account status, model ID ('{ACTIVE_CHAT_MODEL}'), and API status. Error 422 often means the request data was unprocessable."
             }
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Vultr LLM connection test failed with an unexpected exception: {str(e)}",
+            "message": f"LLM connection test failed with an unexpected exception: {str(e)}",
             "error_details": str(e)
         }

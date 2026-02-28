@@ -1,6 +1,15 @@
+alembic==1.14.0
 annotated-types==0.7.0
 anyio==4.9.0
 Authlib==1.6.0
+passlib[bcrypt]==1.7.4
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0
+reportlab==4.2.5
+SQLAlchemy==2.0.36
+stripe==11.3.0
+uvicorn==0.34.0
 certifi==2025.6.15
 cffi==1.17.1
 charset-normalizer==3.4.2

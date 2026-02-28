@@ -24,7 +24,13 @@ for env_path in possible_env_paths:
 if not env_found:
     print("[main.py] ⚠️ WARNING: No .env file found in any standard location!")
 
-app = FastAPI()
+app = FastAPI(
+    title="InsightPilot API",
+    description="API for InsightPilot idea management platform",
+    version="1.0.0",
+    docs_url="/docs",  # Swagger UI
+    redoc_url="/redoc"  # ReDoc
+)
 
 # Add SessionMiddleware for OAuth (required by Authlib)
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY") or secrets.token_urlsafe(32)
@@ -61,20 +67,42 @@ app.add_middleware(
     expose_headers=["*"]  # Allow frontend to read custom headers
 )
 
-# Security Headers Middleware
+# Security Headers Middleware (enabled only in production)
 @app.middleware("http")
 async def add_security_headers(request, call_next):
     response = await call_next(request)
-    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
+
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    if environment != "production":
+        # Do not set strict headers in non-production to avoid blocking docs/local dev
+        return response
+
+    path = request.url.path
+
+    # Relax headers for docs endpoints in production
+    if path.startswith(("/docs", "/redoc", "/openapi.json", "/favicon.ico")):
+        if "Content-Security-Policy" in response.headers:
+            del response.headers["Content-Security-Policy"]
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    else:
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
+        response.headers["X-Frame-Options"] = "DENY"
+
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY" # Redundant if CSP frame-ancestors is used, but good for older browsers
-    # Optional: Strict-Transport-Security (ensure your app is HTTPS-only first)
-    # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 @app.get("/")
 def read_root():
-    return {"message": "API is running!"}
+    return {
+        "message": "InsightPilot API is running!",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "redoc": "/redoc"
+    }
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "message": "API is operational"}
 
 # Comment out automatic table creation to avoid conflicts with Alembic migrations
 # Use Alembic migrations instead for database schema management

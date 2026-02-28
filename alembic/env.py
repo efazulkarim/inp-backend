@@ -21,22 +21,17 @@ config = context.config
 fileConfig(config.config_file_name)
 
 # Set the sqlalchemy.url in the Alembic config *before* it's used by engine_from_config.
-# This ensures that the DATABASE_URL loaded from .env by app/database.py is used.
-if SQLALCHEMY_DATABASE_URL:
-    print(f"[alembic/env.py] 💡 Original sqlalchemy.url from app.database: {SQLALCHEMY_DATABASE_URL}")
-    # Escape '%' for configparser by replacing it with '%%'
-    escaped_db_url = SQLALCHEMY_DATABASE_URL.replace('%', '%%')
-    print(f"[alembic/env.py] 💡 Setting Alembic's sqlalchemy.url (escaped for configparser): {escaped_db_url}")
-    config.set_main_option("sqlalchemy.url", escaped_db_url)
-else:
-    print("[alembic/env.py] ⚠️ WARNING: SQLALCHEMY_DATABASE_URL from app.database is not set. Alembic might use a default from alembic.ini or fail.")
+# app.database raises ValueError if DATABASE_URL is not set, so we always have a valid URL here.
+escaped_db_url = SQLALCHEMY_DATABASE_URL.replace('%', '%%')
+config.set_main_option("sqlalchemy.url", escaped_db_url)
 
 # Set the target metadata for 'autogenerate' support
 target_metadata = Base.metadata
 
-# Force the correct URL for mysql-connector-python during Alembic runs
-# This will override the one from alembic.ini for the engine creation below if it was different,
-# and ensures it doesn't rely on os.getenv() which might be problematic.
+# Note: The database URL is now loaded from app.database (which reads from .env)
+# This ensures that the DATABASE_URL from environment variables is used for Alembic runs.
+# The URL is set above from SQLALCHEMY_DATABASE_URL imported from app.database.
+# Old hardcoded MySQL URL (removed):
 # actual_db_url = "mysql+mysqlconnector://root:%%2B1826%%2BDark@localhost:3306/inp"  # Escaped % to %%
 # config.set_main_option('sqlalchemy.url', actual_db_url) # REMOVED THIS HARDCODING
 
