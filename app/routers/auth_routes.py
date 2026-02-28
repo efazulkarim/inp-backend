@@ -22,9 +22,12 @@ auth_scheme = HTTPBearer() # Keep for other auth methods if any
 
 # OAuth settings
 # Ensure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI are in your .env
+# On Vercel: GOOGLE_REDIRECT_URI can be omitted if VERCEL_URL is set (auto-built as https://$VERCEL_URL/auth/google/callback)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") # This will be used in authorize_redirect
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+if not GOOGLE_REDIRECT_URI and os.getenv("VERCEL_URL"):
+    GOOGLE_REDIRECT_URI = f"https://{os.getenv('VERCEL_URL')}/auth/google/callback"
 
 if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI]):
     logger.error("Missing Google OAuth environment variables!")

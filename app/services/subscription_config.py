@@ -16,7 +16,7 @@ possible_env_paths = [
 env_found = False
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"[Subscription Config] 💡 Found .env file at: {env_path}")
+        print(f"[Subscription Config] Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
         env_found = True
         break

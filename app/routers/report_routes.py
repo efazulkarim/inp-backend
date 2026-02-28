@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response
-from fastapi.responses import FileResponse
+import logging
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from app.auth import get_current_user
@@ -12,8 +13,18 @@ import os
 import tempfile
 from app.services.llm_service import LLMService, ACTIVE_CHAT_MODEL, PROVIDER_NAME
 from app.services.pdf_service import generate_report_pdf
+from app.services.subscription_service import SubscriptionService
+from app.constants import (
+    REPORT_STATUS_QUEUED,
+    REPORT_STATUS_PROCESSING,
+    REPORT_STATUS_COMPLETED,
+    REPORT_STATUS_FAILED,
+    REPORT_STALE_THRESHOLD_SECONDS,
+)
+from io import BytesIO
 import asyncio
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 def calculate_section_score(answers: List[Any], max_score: int) -> int:
@@ -59,35 +70,68 @@ async def request_report_generation(
     ).first()
     
     if existing_report:
-        # If report exists and is not stale, return its status
-        if existing_report.status == "completed":
+        if existing_report.status == REPORT_STATUS_COMPLETED:
             return {
                 "report_id": existing_report.id,
-                "status": "completed",
+                "status": REPORT_STATUS_COMPLETED,
                 "message": "Report already exists"
             }
-        elif existing_report.status == "processing":
-            # Check if it's a stale request (more than 5 minutes old)
-            if (datetime.utcnow() - existing_report.updated_at).total_seconds() > 300:
-                existing_report.status = "queued"  # Reset stale request
+        if existing_report.status == REPORT_STATUS_PROCESSING:
+            elapsed = (datetime.utcnow() - existing_report.updated_at).total_seconds()
+            if elapsed > REPORT_STALE_THRESHOLD_SECONDS:
+                existing_report.status = REPORT_STATUS_QUEUED
                 db.commit()
-            
+                logger.warning(
+                    "Report %s stale (%.0fs), reset to queued",
+                    existing_report.id,
+                    elapsed,
+                )
+
             return {
                 "report_id": existing_report.id,
                 "status": existing_report.status,
-                "message": "Report generation in progress" 
+                "message": "Report generation in progress"
             }
-    
-    # Create a new report record or update existing one
+
+    reports_limit = await SubscriptionService.get_user_limit(
+        current_user, "reports_per_month"
+    )
+    if reports_limit == 0:
+        raise HTTPException(
+            status_code=403,
+            detail="Active subscription required to generate reports.",
+        )
+    if reports_limit != float("inf"):
+        from datetime import timedelta
+        from app.constants import BILLING_PERIOD_DAYS
+
+        if current_user.current_period_end:
+            period_start = current_user.current_period_end - timedelta(
+                days=BILLING_PERIOD_DAYS
+            )
+        else:
+            period_start = datetime.utcnow() - timedelta(days=BILLING_PERIOD_DAYS)
+
+        reports_this_period = db.query(Report).filter(
+            Report.user_id == current_user.id,
+            Report.status == REPORT_STATUS_COMPLETED,
+            Report.created_at >= period_start,
+        ).count()
+        if reports_this_period >= reports_limit:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Report limit reached ({reports_limit} per billing period). Upgrade to generate more.",
+            )
+
     if existing_report:
         report = existing_report
-        report.status = "queued"
+        report.status = REPORT_STATUS_QUEUED
         report.updated_at = datetime.utcnow()
     else:
         report = Report(
             idea_id=idea_id,
             user_id=current_user.id,
-            status="queued",
+            status=REPORT_STATUS_QUEUED,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -106,7 +150,7 @@ async def request_report_generation(
     
     return {
         "report_id": report.id,
-        "status": "queued",
+        "status": REPORT_STATUS_QUEUED,
         "message": "Report generation has been queued"
     }
 
@@ -149,10 +193,9 @@ async def get_report(
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
     
-    # Check if report exists and is completed
     report = db.query(Report).filter(
         Report.idea_id == idea_id,
-        Report.status == "completed"
+        Report.status == REPORT_STATUS_COMPLETED
     ).first()
     
     if not report:
@@ -191,35 +234,32 @@ async def download_report(
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
     
-    # Get the report
     report = db.query(Report).filter(
         Report.idea_id == idea_id,
-        Report.status == "completed"
+        Report.status == REPORT_STATUS_COMPLETED
     ).first()
-    
+
     if not report or not report.content:
         raise HTTPException(status_code=404, detail="Report not found or incomplete")
-    
-    # Generate PDF
-    pdf_path = await generate_report_pdf(report.content, idea.idea_name)
-    
-    # Return the PDF file
-    return FileResponse(
-        path=pdf_path,
-        filename=f"{idea.idea_name.replace(' ', '_')}_Report.pdf",
-        media_type="application/pdf"
+
+    pdf_bytes = await generate_report_pdf(report.content, idea.idea_name)
+    filename = f"{idea.idea_name.replace(' ', '_')}_Report.pdf"
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
-# Background task function
 async def generate_report_background(report_id: int, idea_id: int, user_id: int):
-    """Background task to generate a report"""
+    """Background task to generate a report."""
     db = SessionLocal()
     try:
-        # Update report status to processing
         report = db.query(Report).filter(Report.id == report_id).first()
         if not report:
+            logger.warning("Report %s not found for background generation", report_id)
             return
-        report.status = "processing"
+        report.status = REPORT_STATUS_PROCESSING
         report.updated_at = datetime.utcnow()
         db.commit()
 
@@ -233,7 +273,7 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
         ).all()
 
         if not answers:
-            report.status = "failed"
+            report.status = REPORT_STATUS_FAILED
             report.error_message = "No answers found for this idea"
             db.commit()
             return
@@ -252,8 +292,12 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
                 if persona:
                     linked_personas.append(persona)
         except Exception as e:
-            # If persona linking fails (e.g., table doesn't exist), continue without personas
-            print(f"Warning: Could not load linked personas for idea {idea_id}: {str(e)}")
+            logger.warning(
+                "Could not load linked personas for idea %s: %s",
+                idea_id,
+                e,
+                exc_info=False,
+            )
             linked_personas = []
 
         # Group answers by section with max scores
@@ -271,14 +315,6 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             "feasibility": {"title": "Feasibility", "max_score": 10} # Last section has max_score 10
         }
 
-        # ------------------------------
-        # Run section analyses concurrently (speed!)
-        # ------------------------------
-         # Process each section with LLM
-        section_analyses = []
-        total_score = 0
-
-        # map section_key to questionnaire step number
         step_map = {
             "target_audience": 1,
             "problem_identification": 2,
@@ -293,38 +329,63 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             "feasibility": 11,
         }
 
+        # Build section payloads (sync DB reads - session not safe for concurrent access)
+        section_payloads = []
         for section_key, section_info in sections.items():
             step_num = step_map[section_key]
-            # Get questions and answers for this section
             section_questions = db.query(Questionnaire).filter(
                 Questionnaire.q_uuid.startswith(f"step_{step_num}_")
             ).all()
-
             section_answers = [
-                answer for answer in answers
-                if answer.question_id in [q.id for q in section_questions]
+                a for a in answers
+                if a.question_id in [q.id for q in section_questions]
             ]
+            section_payloads.append(
+                (section_key, section_info, section_questions, section_answers)
+            )
 
-            # Generate analysis using LLM
+        async def analyze_section(
+            section_key: str,
+            section_info: dict,
+            question_texts: list,
+            answer_values: list,
+        ):
             try:
                 analysis = await LLMService.generate_section_analysis(
                     section_info["title"],
-                    [a.answer for a in section_answers],
-                    [q.text for q in section_questions],
-                    section_info["max_score"] # Pass max_score for the section
+                    answer_values,
+                    question_texts,
+                    section_info["max_score"],
                 )
-                section_analyses.append({
+                return {
                     "section": section_info["title"],
                     "score": analysis["score"],
-                    "max_score": section_info["max_score"], # Store max_score
-                    "weighted_score": section_info["max_score"], # Set weighted_score to max_score
+                    "max_score": section_info["max_score"],
+                    "weighted_score": section_info["max_score"],
                     "insight": analysis["insight"],
-                    "recommendations": analysis["recommendations"]
-                })
-                total_score += analysis["score"]
+                    "recommendations": analysis["recommendations"],
+                }
             except Exception as e:
-                # Log the error but continue with other sections
-                print(f"Error analyzing section {section_key}: {str(e)}")
+                logger.error(
+                    "Error analyzing section %s: %s",
+                    section_key,
+                    e,
+                    exc_info=True,
+                )
+                return None
+
+        tasks = [
+            analyze_section(
+                sk,
+                si,
+                [q.text for q in sq],
+                [a.answer for a in sa],
+            )
+            for sk, si, sq, sa in section_payloads
+        ]
+        raw_results = await asyncio.gather(*tasks, return_exceptions=False)
+        section_analyses = [r for r in raw_results if r is not None]
+        total_score = sum(s["score"] for s in section_analyses)
 
         # Generate strategic overview
         strategic_analysis = await LLMService.generate_strategic_overview(
@@ -350,22 +411,25 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             ],
             "strategic_next_steps": strategic_analysis["strategic_next_steps"]
         }
-        report.status = "completed"
+        report.status = REPORT_STATUS_COMPLETED
         report.updated_at = datetime.utcnow()
         db.commit()
 
     except Exception as e:
-        # If any error occurs, mark report as failed
+        logger.exception("Report generation failed for report_id=%s: %s", report_id, e)
         try:
             report = db.query(Report).filter(Report.id == report_id).first()
             if report:
-                report.status = "failed"
+                report.status = REPORT_STATUS_FAILED
                 report.error_message = str(e)
                 report.updated_at = datetime.utcnow()
                 db.commit()
-        except:
-            pass
-        print(f"Error generating report: {str(e)}")
+        except Exception as commit_err:
+            logger.error(
+                "Failed to persist report failure state: %s",
+                commit_err,
+                exc_info=True,
+            )
     finally:
         db.close()
 

@@ -17,7 +17,7 @@ possible_env_paths = [
 env_found = False
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"[main.py] 💡 Found .env file at: {env_path}")
+        print(f"[main.py] Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
         env_found = True
         break
@@ -37,20 +37,27 @@ SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY") or secrets.token_urlsafe(32
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
 # CORS middleware configuration
-origins = [
-    "http://localhost",
-    "https://app.insightpilot.co",
-    "https://inp-dashboard.netlify.app",
-    "http://localhost:3000",  # React development server
-    "http://127.0.0.1",
-    "http://127.0.0.1:3000",
-    "https://localhost",
-    "https://localhost:3000",
-    # Production URLs - REPLACE THESE WITH YOUR ACTUAL DOMAINS
-    "https://www.yourdomain.com",
-    "https://app.yourdomain.com",
-    # Add any other origins your frontend might be served from
-]
+# Vercel: Add VERCEL_URL (e.g. https://your-project.vercel.app) for frontend on Vercel
+def _get_cors_origins() -> list[str]:
+    base = [
+        "http://localhost",
+        "https://app.insightpilot.co",
+        "https://inp-dashboard.netlify.app",
+        "http://localhost:3000",
+        "http://127.0.0.1",
+        "http://127.0.0.1:3000",
+        "https://localhost",
+        "https://localhost:3000",
+    ]
+    frontend_url = os.getenv("FRONTEND_URL")
+    if frontend_url:
+        base.append(frontend_url.rstrip("/"))
+    vercel_url = os.getenv("VERCEL_URL")
+    if vercel_url:
+        base.extend([f"https://{vercel_url}", f"https://www.{vercel_url}"])
+    return base
+
+origins = _get_cors_origins()
 
 # For development, you can also use a wildcard
 # Make sure to list your specific frontend origins for production.

@@ -35,7 +35,7 @@ possible_env_paths = [
 env_found = False
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"[Stripe Routes] 💡 Found .env file at: {env_path}")
+        print(f"[Stripe Routes] Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
         env_found = True
         break
@@ -46,16 +46,16 @@ if not env_found:
 # Set Stripe API Key and print debug info
 stripe_key = os.getenv("STRIPE_SECRET_KEY")
 stripe.api_key = stripe_key
-print(f"[Stripe Routes] 🔑 Stripe API Key: {'Found (starts with ' + stripe_key[:7] + '...)' if stripe_key else 'NOT FOUND!'}")
+print(f"[Stripe Routes] Stripe API Key: {'Found (starts with ' + stripe_key[:7] + '...)' if stripe_key else 'NOT FOUND!'}")
 
 # Get webhook secret and print debug info
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-print(f"[Stripe Routes] 🔒 Stripe Webhook Secret: {'Found (starts with ' + STRIPE_WEBHOOK_SECRET[:7] + '...)' if STRIPE_WEBHOOK_SECRET else 'NOT FOUND!'}")
+print(f"[Stripe Routes] Stripe Webhook Secret: {'Found (starts with ' + STRIPE_WEBHOOK_SECRET[:7] + '...)' if STRIPE_WEBHOOK_SECRET else 'NOT FOUND!'}")
 
 # Debug: Print all important env vars to help troubleshoot
-print(f"[Stripe Routes] 🌐 Frontend URL: {os.getenv('FRONTEND_URL', 'NOT SET')}")
-print(f"[Stripe Routes] 📧 Solopreneur Price ID: {os.getenv('STRIPE_SOLOPRENEUR_PRICE_ID', 'NOT SET')}")
-print(f"[Stripe Routes] 🚀 Entrepreneur Price ID: {os.getenv('STRIPE_ENTREPRENEUR_PRICE_ID', 'NOT SET')}")
+print(f"[Stripe Routes] Frontend URL: {os.getenv('FRONTEND_URL', 'NOT SET')}")
+print(f"[Stripe Routes] Solopreneur Price ID: {os.getenv('STRIPE_SOLOPRENEUR_PRICE_ID', 'NOT SET')}")
+print(f"[Stripe Routes] Entrepreneur Price ID: {os.getenv('STRIPE_ENTREPRENEUR_PRICE_ID', 'NOT SET')}")
 
 router = APIRouter()
 security = HTTPBearer()
