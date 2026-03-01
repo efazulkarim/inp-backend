@@ -1,7 +1,23 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, DateTime , JSON, Boolean
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, DateTime, JSON, Boolean
 from sqlalchemy.orm import relationship
+from sqlalchemy import TypeDecorator
 from .database import Base
 from datetime import datetime
+
+
+class IntBool(TypeDecorator):
+    """Stores bool as integer (0/1) for DB compatibility."""
+    impl = Integer
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return 1 if value else 0
+
+    def process_result_value(self, value, dialect):
+        return bool(value) if value is not None else False
+
 
 class User(Base):
     __tablename__ = "users"
@@ -16,7 +32,7 @@ class User(Base):
     role = Column(String(50), nullable=True)
     password = Column(String(255))  # Hashed password
     status = Column(Integer, default=1)
-    verified = Column(Integer, default=0)
+    verified = Column(IntBool, default=0)
 
     # Stripe subscription-related columns
     subscription_plan = Column(String(50), nullable=True)  # e.g., "free", "basic", "pro"

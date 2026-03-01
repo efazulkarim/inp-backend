@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import logging
 from fastapi.responses import RedirectResponse, JSONResponse
 import os
+import secrets
 import traceback
 from authlib.integrations.starlette_client import OAuth
 from starlette.middleware.sessions import SessionMiddleware # Required for Oauth state
@@ -109,11 +110,11 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
         logger.info(f"[Google Callback] User {email} not found. Creating new user.")
         db_user = models.User(
             email=email,
-            username=user_info_google.get('email', '').split('@')[0], # Use email part as username
+            username=user_info_google.get('email', '').split('@')[0],
             first_name=user_info_google.get('given_name', ''),
             last_name=user_info_google.get('family_name', ''),
-            password=auth.hash_password(os.urandom(16).hex()),  # Set a strong, random password for OAuth users
-            verified=True # Assume email is verified by Google
+            password=auth.hash_password(secrets.token_hex(16)),
+            verified=True,
         )
         db.add(db_user)
         db.commit()

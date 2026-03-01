@@ -3,7 +3,8 @@ annotated-types==0.7.0
 anyio==4.9.0
 Authlib==1.6.0
 passlib[bcrypt]==1.7.4
-psycopg2-binary==2.9.9
+bcrypt>=4.0,<5.0
+psycopg2-binary>=2.9.11
 python-dotenv==1.0.1
 python-jose[cryptography]==3.3.0
 reportlab==4.2.5
@@ -16,6 +17,7 @@ charset-normalizer==3.4.2
 click==8.1.8
 cryptography==45.0.5
 dparse==0.6.4
+email-validator>=2.0.0
 ecdsa==0.19.1
 fastapi==0.116.0
 filelock==3.16.1
@@ -23,6 +25,7 @@ h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
 idna==3.10
+itsdangerous>=2.0
 Jinja2==3.1.6
 joblib==1.5.1
 markdown-it-py==3.0.0
