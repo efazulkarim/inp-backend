@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes, customerboard_routes, stripe_routes
+from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes, customerboard_routes, stripe_routes, polar_routes
 from starlette.middleware.sessions import SessionMiddleware
 import secrets
 
@@ -125,6 +125,7 @@ app.include_router(archive_routes.router, prefix="/archive", tags=["Archive"])
 app.include_router(report_routes.router, prefix="/api/report", tags=["report"])
 app.include_router(customerboard_routes.router, prefix="/api/customerboard", tags=["customerboard"])
 app.include_router(stripe_routes.router, prefix="/api/stripe", tags=["stripe"])
+app.include_router(polar_routes.router, prefix="/api/polar", tags=["polar"])
 
 
 @auth_routes.router.get("/debug-oauth")

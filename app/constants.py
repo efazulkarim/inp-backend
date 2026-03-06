@@ -13,3 +13,9 @@ REPORT_STALE_THRESHOLD_SECONDS = 300
 
 # Billing period approximation (days) when period_start is not stored
 BILLING_PERIOD_DAYS = 31
+
+# Polar product ID env var names (plan_key -> env var)
+POLAR_PRODUCT_ID_ENV_KEYS = {
+    "solopreneur": "POLAR_SOLOPRENEUR_PRODUCT_ID",
+    "entrepreneur": "POLAR_ENTREPRENEUR_PRODUCT_ID",
+}

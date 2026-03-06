@@ -302,6 +302,7 @@ class SubscriptionTier(BaseModel):
     """Schema representing a subscription plan/price option returned to the frontend."""
     plan_key: str  # e.g. "solopreneur", "entrepreneur"
     id: Optional[str] = None  # Stripe price ID (None for contact-sales plans)
+    polar_product_id: Optional[str] = None  # Polar product UUID when using Polar
     name: str
     description: Optional[str] = None
     price: Optional[float] = None  # Raw Stripe price amount (e.g. 312 for yearly)

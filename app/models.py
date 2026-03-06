@@ -39,6 +39,8 @@ class User(Base):
     subscription_status = Column(String(50), nullable=True)  # e.g., "active", "canceled"
     stripe_customer_id = Column(String(255), nullable=True, unique=True)
     stripe_subscription_id = Column(String(255), nullable=True, unique=True)
+    polar_customer_id = Column(String(255), nullable=True)
+    polar_subscription_id = Column(String(255), nullable=True)
     current_period_end = Column(DateTime, nullable=True)
     trial_end = Column(DateTime, nullable=True)
 
