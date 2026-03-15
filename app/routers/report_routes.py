@@ -4,7 +4,17 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from app.auth import get_current_user
-from app.models import Answer, User, IdeaBoard, Questionnaire, Report, CustomerPersona, IdeaPersonaLink
+from app.models import (
+    Answer,
+    User,
+    IdeaBoard,
+    Questionnaire,
+    Report,
+    CustomerPersona,
+    IdeaPersonaLink,
+    IdeaModuleSelection,
+    MetricModule,
+)
 from app import schemas
 from app.database import get_db, SessionLocal
 from datetime import datetime
@@ -386,6 +396,61 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
         ]
         raw_results = await asyncio.gather(*tasks, return_exceptions=False)
         section_analyses = [r for r in raw_results if r is not None]
+
+        # ---- Enabled metric modules (dynamic add-on sections) ----
+        try:
+            module_selections = (
+                db.query(IdeaModuleSelection)
+                .filter(IdeaModuleSelection.idea_id == idea_id)
+                .all()
+            )
+            module_payloads = []
+            for sel in module_selections:
+                module = (
+                    db.query(MetricModule)
+                    .filter(MetricModule.id == sel.module_id)
+                    .first()
+                )
+                if not module:
+                    continue
+                mod_questions = (
+                    db.query(Questionnaire)
+                    .filter(
+                        Questionnaire.module_slug == module.slug,
+                        Questionnaire.status == 1,
+                    )
+                    .all()
+                )
+                mod_answers = [
+                    a
+                    for a in answers
+                    if a.question_id in [q.id for q in mod_questions]
+                ]
+                if mod_answers:
+                    module_payloads.append(
+                        (module.slug, {"title": module.title, "max_score": module.max_score}, mod_questions, mod_answers)
+                    )
+
+            if module_payloads:
+                module_tasks = [
+                    analyze_section(
+                        slug,
+                        info,
+                        [q.text for q in qs],
+                        [a.answer for a in ans],
+                    )
+                    for slug, info, qs, ans in module_payloads
+                ]
+                module_results = await asyncio.gather(*module_tasks, return_exceptions=False)
+                section_analyses.extend(r for r in module_results if r is not None)
+        except Exception as mod_err:
+            logger.warning(
+                "Could not process metric modules for idea %s: %s",
+                idea_id,
+                mod_err,
+                exc_info=False,
+            )
+
         total_score = sum(s["score"] for s in section_analyses)
 
         # Generate strategic overview

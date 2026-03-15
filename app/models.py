@@ -72,6 +72,7 @@ class Questionnaire(Base):
     remarks = Column(Text)
     input_type = Column(String(100))
     range = Column(Text)
+    module_slug = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
     status = Column(Integer)
@@ -208,4 +209,31 @@ class IdeaPersonaLink(Base):
     # Relationships
     idea = relationship("IdeaBoard")
     persona = relationship("CustomerPersona")
+    user = relationship("User")
+
+
+class MetricModule(Base):
+    __tablename__ = "metric_modules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    max_score = Column(Integer, default=9)
+    is_default = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class IdeaModuleSelection(Base):
+    __tablename__ = "idea_module_selections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    idea_id = Column(Integer, ForeignKey("ideaboard.id"), nullable=False)
+    module_id = Column(Integer, ForeignKey("metric_modules.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    idea = relationship("IdeaBoard")
+    module = relationship("MetricModule")
     user = relationship("User")

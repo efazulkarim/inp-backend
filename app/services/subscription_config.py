@@ -69,7 +69,8 @@ SUBSCRIPTION_PLANS: Dict[str, Dict[str, Any]] = {
         "limits": {
             "idea_boards": 1,
             "reports_per_month": 10,
-            "customer_personas": 5
+            "customer_personas": 5,
+            "metric_modules": 0
         },
         "prices": {
             "month": {
@@ -87,12 +88,14 @@ SUBSCRIPTION_PLANS: Dict[str, Dict[str, Any]] = {
             "Unlimited idea boards",
             "Idea validation",
             "Report generation",
-            "Customer persona building"
+            "Customer persona building",
+            "Advanced metric modules"
         ],
         "limits": {
             "idea_boards": float('inf'),
             "reports_per_month": float('inf'),
-            "customer_personas": float('inf')
+            "customer_personas": float('inf'),
+            "metric_modules": float('inf')
         },
         "prices": {
             "month": {
@@ -116,11 +119,13 @@ SUBSCRIPTION_PLANS: Dict[str, Dict[str, Any]] = {
         "contact_sales": True,
         "features": [
             "Applicable for Universities and organizations more than 500 team size",
+            "Advanced metric modules",
         ],
         "limits": {
             "idea_boards": float('inf'),
             "reports_per_month": float('inf'),
-            "customer_personas": float('inf')
+            "customer_personas": float('inf'),
+            "metric_modules": float('inf')
         },
     }
 }

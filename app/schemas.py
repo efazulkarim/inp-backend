@@ -360,3 +360,70 @@ class IdeaPersonasResponse(BaseModel):
     
     class Config:
         orm_mode = True
+
+
+# ---------------------------------------------------------------------------
+# Metric Modules
+# ---------------------------------------------------------------------------
+
+class MetricModuleResponse(BaseModel):
+    id: int
+    slug: str
+    title: str
+    description: Optional[str] = None
+    max_score: int
+    sort_order: int
+
+    class Config:
+        orm_mode = True
+
+
+class ModuleSelectionCreate(BaseModel):
+    module_id: int
+
+
+class ModuleSelectionResponse(BaseModel):
+    id: int
+    idea_id: int
+    module_id: int
+    module_slug: str
+    module_title: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class IdeaModulesResponse(BaseModel):
+    idea_id: int
+    modules: List[ModuleSelectionResponse]
+
+
+class ModuleQuestionDetail(BaseModel):
+    id: str
+    question_text: str
+    description: Optional[str] = None
+    question_type: str
+    options: Optional[List[str]] = None
+
+
+class ModuleQuestionsResponse(BaseModel):
+    module_slug: str
+    module_title: str
+    questions: List[ModuleQuestionDetail]
+
+
+class ModuleAnswerItem(BaseModel):
+    id: str
+    type: str
+    value: Union[str, List[str]]
+
+
+class ModuleAnswerCreate(BaseModel):
+    questions: List[ModuleAnswerItem]
+
+
+class ModuleAnswerSaveResponse(BaseModel):
+    message: str
+    module_slug: str
+    idea_id: int

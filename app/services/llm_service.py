@@ -216,7 +216,7 @@ Example JSON (if max_section_score was 9):
                     "insight": api_response.get("insight", f"Unable to generate insight for {section_name} due to an API error."),
                     "recommendations": api_response.get("recommendations", ["Try again later."]),
                     "score": api_response.get("score", 0),
-                    "reasoning": api_response.get("reasoning", "Error in Vultr API call."),
+                    "reasoning": api_response.get("reasoning", f"Error in {PROVIDER_NAME} API call."),
                     "token_usage": token_usage
                 }
 
