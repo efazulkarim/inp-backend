@@ -28,8 +28,8 @@ async def create_idea(
         db.commit()
         db.refresh(new_idea)
         return new_idea
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error creating idea: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Error creating idea")
 
 @router.get("/questions/{step}", response_model=schemas.QuestionnaireResponse)
 async def get_step_questions(
@@ -139,9 +139,9 @@ async def save_step_data(
             "is_complete": idea.is_complete
         }
     
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error saving answers: {str(e)}")
+        raise HTTPException(status_code=400, detail="Error saving answers")
 
 @router.get("/progress/{idea_id}", response_model=schemas.IdeaProgressResponse)
 async def get_idea_progress(
@@ -323,9 +323,9 @@ async def link_persona_to_idea(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         # If persona linking fails (e.g., table doesn't exist), return an error
-        print(f"Error linking persona to idea: {str(e)}")
+        print("Error linking persona to idea")
         raise HTTPException(status_code=500, detail="Persona linking is not available at this time")
 
 @router.get("/ideas/{idea_id}/personas", response_model=schemas.IdeaPersonasResponse)
@@ -357,9 +357,9 @@ async def get_idea_personas(
             ).first()
             if persona:
                 personas.append(persona)
-    except Exception as e:
+    except Exception:
         # If persona linking fails (e.g., table doesn't exist), return empty list
-        print(f"Warning: Could not load linked personas for idea {idea_id}: {str(e)}")
+        print(f"Warning: Could not load linked personas for idea {idea_id}")
         personas = []
     
     return {
@@ -401,7 +401,7 @@ async def unlink_persona_from_idea(
         return {"message": "Persona unlinked successfully"}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         # If persona unlinking fails (e.g., table doesn't exist), return an error
-        print(f"Error unlinking persona from idea: {str(e)}")
+        print("Error unlinking persona from idea")
         raise HTTPException(status_code=500, detail="Persona unlinking is not available at this time")

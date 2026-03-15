@@ -88,9 +88,9 @@ def restore_from_archive(
         db.delete(archive_item)
         db.commit()
         return {"msg": "Idea restored successfully from archive"}
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error restoring idea: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error restoring idea")
 
 # Delete individual archived idea
 @router.delete("/{archive_id}", response_model=MessageResponse)
@@ -114,6 +114,6 @@ def delete_archived_idea(
         db.delete(archive_item)
         db.commit()
         return {"msg": "Archived idea deleted successfully"}
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error deleting archived idea: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error deleting archived idea")

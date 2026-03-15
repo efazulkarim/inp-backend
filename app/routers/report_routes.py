@@ -26,6 +26,7 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 
 def calculate_section_score(answers: List[Any], max_score: int) -> int:
     """Calculate score for a section based on completeness and quality of answers"""
@@ -421,7 +422,7 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
             report = db.query(Report).filter(Report.id == report_id).first()
             if report:
                 report.status = REPORT_STATUS_FAILED
-                report.error_message = str(e)
+                report.error_message = "Report generation failed"
                 report.updated_at = datetime.utcnow()
                 db.commit()
         except Exception as commit_err:
@@ -437,6 +438,8 @@ async def generate_report_background(report_id: int, idea_id: int, user_id: int)
 @router.get("/test-llm")
 async def test_llm_connection():
     """Test if the LLM connection (GLM or Vultr) is working properly"""
+    if ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     try:
         api_key = os.getenv("GLM_API_KEY") or os.getenv("VULTR_API_KEY")
         if not api_key:
@@ -494,6 +497,5 @@ async def test_llm_connection():
     except Exception as e:
         return {
             "status": "error",
-            "message": f"LLM connection test failed with an unexpected exception: {str(e)}",
-            "error_details": str(e)
+            "message": "LLM connection test failed with an unexpected exception."
         }

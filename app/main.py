@@ -1,7 +1,7 @@
 # app/main.py
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes, customerboard_routes, stripe_routes, polar_routes
@@ -130,6 +130,8 @@ app.include_router(polar_routes.router, prefix="/api/polar", tags=["polar"])
 
 @auth_routes.router.get("/debug-oauth")
 async def debug_oauth():
+    if os.getenv("ENVIRONMENT", "development").lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     return {
         "frontend_url": os.getenv('FRONTEND_URL'),
         "google_redirect_uri": os.getenv('GOOGLE_REDIRECT_URI'),

@@ -356,7 +356,7 @@ async def _handle_subscription_updated(data: dict, db: Session) -> None:
     if trial_end is not None:
         user.trial_end = (
             trial_end
-            if isinstance(trial_end, datetime) or trial_end is None
+            if isinstance(trial_end, datetime)
             else datetime.fromisoformat(str(trial_end).replace("Z", "+00:00"))
         )
     db.commit()

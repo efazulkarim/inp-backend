@@ -7,8 +7,10 @@ from app.models import CustomerPersona, User, IdeaBoard, CustomerPersonaQuestion
 from app import schemas
 from app.database import get_db
 import json
+import os
 
 router = APIRouter()
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 
 @router.post("/personas/debug")
 async def debug_create_persona(
@@ -16,6 +18,8 @@ async def debug_create_persona(
     current_user: User = Depends(get_current_user)
 ):
     """Debug endpoint to see what data is being sent"""
+    if ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     try:
         # Try to parse it as CustomerPersonaCreate
         persona = schemas.CustomerPersonaCreate(**persona_data)
@@ -27,7 +31,7 @@ async def debug_create_persona(
     except Exception as e:
         return {
             "status": "error",
-            "message": str(e),
+            "message": "Invalid payload",
             "received_data": persona_data,
             "expected_fields": {
                 "required": ["persona_name"],
@@ -54,6 +58,8 @@ async def test_minimal_persona(
     current_user: User = Depends(get_current_user)
 ):
     """Test creating a persona with minimal data"""
+    if ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     try:
         # Create with only required field
         db_persona = CustomerPersona(
@@ -79,11 +85,11 @@ async def test_minimal_persona(
                 "updated_at": db_persona.updated_at
             }
         }
-    except Exception as e:
+    except Exception:
         db.rollback()
         return {
             "status": "error",
-            "message": f"Error creating minimal persona: {str(e)}"
+            "message": "Error creating minimal persona"
         }
 
 @router.post("/personas", response_model=schemas.CustomerPersonaResponse)
@@ -143,14 +149,14 @@ async def create_persona(
         
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
         # Log the actual error for debugging
-        print(f"Error creating persona: {str(e)}")
+        print("Error creating persona")
         print(f"Persona data: {persona.dict()}")
         raise HTTPException(
             status_code=422,
-            detail=f"Error creating persona: {str(e)}. Please check that all fields are in the correct format."
+            detail="Error creating persona. Please check that all fields are in the correct format."
         )
 
 @router.get("/personas", response_model=List[schemas.CustomerPersonaResponse])
@@ -268,9 +274,9 @@ async def get_personas_by_idea(
             ).first()
             if persona:
                 personas.append(persona)
-    except Exception as e:
+    except Exception:
         # If persona linking fails (e.g., table doesn't exist), return empty list
-        print(f"Warning: Could not load linked personas for idea {idea_id}: {str(e)}")
+        print(f"Warning: Could not load linked personas for idea {idea_id}")
         personas = []
     
     return personas
@@ -290,8 +296,8 @@ async def get_customerboard_questions(
                 if not isinstance(options, list):
                     print(f"Invalid range for q_uuid {q.q_uuid}: {options}")
                     options = None
-            except Exception as e:
-                print(f"Error parsing range for q_uuid {q.q_uuid}: {e}")
+            except Exception:
+                print(f"Error parsing range for q_uuid {q.q_uuid}")
                 options = None
         input_type = q.input_type
         if input_type == "multiple_choice":

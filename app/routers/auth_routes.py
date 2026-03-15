@@ -11,7 +11,6 @@ import logging
 from fastapi.responses import RedirectResponse, JSONResponse
 import os
 import secrets
-import traceback
 from authlib.integrations.starlette_client import OAuth
 from starlette.middleware.sessions import SessionMiddleware # Required for Oauth state
 
@@ -73,7 +72,7 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
         # logger.debug(f"[Google Callback] Full token: {token}") # Be cautious logging full tokens
     except Exception as e:
         logger.error(f"[Google Callback] Error authorizing access token: {e}")
-        logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
+        logger.debug("[Google Callback] authorize_access_token failure", exc_info=True)
         # Avoid leaking raw exception details to the client
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth authorization failed. Please try again or contact support if the issue persists.")
 
@@ -99,8 +98,7 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
         raise he # Re-raise HTTPExceptions directly
     except Exception as e:
         logger.error(f"[Google Callback] Error processing user information: {e}")
-        logger.error(f"[Google Callback] Full token at error: {token}") # Log token for debugging
-        logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
+        logger.debug("[Google Callback] userinfo processing failure", exc_info=True)
         # Avoid leaking raw exception details to the client
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to process user information. Please try again or contact support if the issue persists.")
 
@@ -132,7 +130,7 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
     # Ensure FRONTEND_URL is set in your .env
     frontend_url = os.getenv('FRONTEND_URL', "https://app.insightpilot.co") # Default to root if not set
     response_url = f"{frontend_url}/oauth-success?access_token={access_token}&refresh_token={refresh_token}"
-    logger.info(f"[Google Callback] Redirecting to: {response_url}")
+    logger.info("[Google Callback] Redirecting to configured frontend callback.")
     return RedirectResponse(url=response_url)
 
 @router.post("/register", response_model=schemas.UserDisplay)
@@ -180,7 +178,7 @@ def forgot_password(request: schemas.ForgotPassword, db: Session = Depends(get_d
     if not user:
         # Don't reveal that the user doesn't exist for security reasons
         # Instead, log it and return a generic message
-        logger.info(f"Password reset requested for non-existent email: {request.email}")
+        logger.info("Password reset requested for non-existent account")
         return {"msg": "If your email is registered, you will receive a password reset link."}
     
     # Generate password reset token
@@ -188,7 +186,7 @@ def forgot_password(request: schemas.ForgotPassword, db: Session = Depends(get_d
     
     # TODO: In a real application, send an email with the reset token/link
     # For development, we'll just return the token in the response
-    logger.info(f"Password reset token generated for {user.email}: {reset_token}")
+    logger.info("Password reset token generated")
     
     # Return success message
     return {"msg": "If your email is registered, you will receive a password reset link."}
@@ -203,7 +201,7 @@ def reset_password(request: schemas.ResetPassword, db: Session = Depends(get_db)
         email = auth.verify_password_reset_token(request.token)
     except HTTPException as e:
         # Token verification failed
-        logger.warning(f"Invalid password reset token: {request.token}")
+        logger.warning("Invalid password reset token received")
         raise e
     
     # Find the user

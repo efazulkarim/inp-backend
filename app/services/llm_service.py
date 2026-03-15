@@ -291,10 +291,11 @@ Example JSON (if max_section_score was 9):
 
         user_content_parts = [f"Business Idea Name: {idea_name}", "\\nSection Analyses Summary:"]
         for i, section_data in enumerate(all_sections_analysis):
+            max_score = section_data.get('max_score', 9)
             recommendations_str = ", ".join(section_data.get('recommendations', []))
             user_content_parts.append(
                 f"\\nSection {i+1}: {section_data.get('section', 'N/A')}\\n"
-                f"  Score: {section_data.get('score', 'N/A')}/15\\n"
+                f"  Score: {section_data.get('score', 'N/A')}/{max_score}\\n"
                 f"  Insight: {section_data.get('insight', 'N/A')}\\n"
                 f"  Recommendations: {recommendations_str}"
             )
