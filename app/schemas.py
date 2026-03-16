@@ -16,7 +16,7 @@ class UserDisplay(UserBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -28,7 +28,7 @@ class UserMe(UserBase):
     phone: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Token(BaseModel):
     access_token: str
@@ -48,7 +48,7 @@ class IdeaResponse(IdeaCreate):
     completed_steps: Optional[List[int]] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class QuestionBase(BaseModel):
     text: str
@@ -65,7 +65,7 @@ class QuestionResponse(QuestionBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class QuestionnaireResponse(BaseModel):
     step: int
@@ -90,7 +90,7 @@ class AnswerPublic(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True 
+        from_attributes = True 
 
 class StepProgress(BaseModel):
     completed: bool
@@ -104,13 +104,13 @@ class IdeaProgressResponse(BaseModel):
     total_steps: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class MessageResponse(BaseModel):
     msg: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class TrashSchema(BaseModel):
     id: int
@@ -120,7 +120,7 @@ class TrashSchema(BaseModel):
     deleted_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ArchiveSchema(BaseModel):
     id: int
@@ -130,7 +130,7 @@ class ArchiveSchema(BaseModel):
     archived_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ReportSection(BaseModel):
     category: str
@@ -140,7 +140,7 @@ class ReportSection(BaseModel):
     recommendations: List[str]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ReportResponse(BaseModel):
     idea_name: str
@@ -150,7 +150,7 @@ class ReportResponse(BaseModel):
     strategic_next_steps: List[str]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ForgotPassword(BaseModel):
     email: EmailStr
@@ -183,7 +183,7 @@ class StepQuestionsResponse(BaseModel):
     questions: List[QuestionDetail]
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Report related schemas
 class ReportRequestResponse(BaseModel):
@@ -199,14 +199,14 @@ class ReportStatusResponse(BaseModel):
     error_message: Optional[str] = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ReportSectionRecommendation(BaseModel):
     title: str
     description: str
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ReportDetailSection(BaseModel):
     category: str
@@ -216,7 +216,7 @@ class ReportDetailSection(BaseModel):
     recommendations: List[str]
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class PDFExportOptions(BaseModel):
     include_charts: bool = True
@@ -276,7 +276,7 @@ class CustomerPersonaResponse(CustomerPersonaBase):
     updated_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CustomerPersonaQuestionnaireBase(BaseModel):
     q_uuid: str
@@ -294,7 +294,7 @@ class CustomerPersonaQuestionnaireResponse(CustomerPersonaQuestionnaireBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Subscription schemas for 3-tier model
@@ -351,7 +351,7 @@ class PersonaLinkResponse(BaseModel):
     created_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class IdeaPersonasResponse(BaseModel):
     """Response containing all personas linked to an idea"""
@@ -359,7 +359,7 @@ class IdeaPersonasResponse(BaseModel):
     personas: List[CustomerPersonaResponse]
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +375,7 @@ class MetricModuleResponse(BaseModel):
     sort_order: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ModuleSelectionCreate(BaseModel):
@@ -391,7 +391,7 @@ class ModuleSelectionResponse(BaseModel):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class IdeaModulesResponse(BaseModel):
