@@ -49,6 +49,58 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 router = APIRouter()
 
 
+def _read_field(source, field_name, default=None):
+    """Read a field from dict-like or object-like SDK responses."""
+    if source is None:
+        return default
+    if isinstance(source, dict):
+        return source.get(field_name, default)
+    return getattr(source, field_name, default)
+
+
+def _normalize_amount(raw_amount):
+    """Normalize Polar amount to major currency units (e.g. cents -> dollars)."""
+    if raw_amount is None:
+        return None
+    try:
+        amount = float(raw_amount)
+    except (TypeError, ValueError):
+        return None
+    return round(amount / 100, 2) if amount >= 100 else round(amount, 2)
+
+
+def _monthly_equivalent(amount, interval: str):
+    if amount is None:
+        return None
+    if interval == "year":
+        return round(amount / 12, 2)
+    return amount
+
+
+def _extract_price_entries(product_obj) -> list[dict]:
+    prices = _read_field(product_obj, "prices", []) or []
+    entries = []
+    for price_obj in prices:
+        interval = (_read_field(price_obj, "recurring_interval") or _read_field(price_obj, "interval") or "month").lower()
+        raw_amount = _read_field(price_obj, "price_amount")
+        if raw_amount is None:
+            raw_amount = _read_field(price_obj, "amount")
+        if raw_amount is None:
+            raw_amount = _read_field(price_obj, "unit_amount")
+        amount = _normalize_amount(raw_amount)
+        currency = (_read_field(price_obj, "price_currency") or _read_field(price_obj, "currency") or "usd").lower()
+        entries.append(
+            {
+                "id": _read_field(price_obj, "id"),
+                "interval": interval,
+                "price": amount,
+                "display_price": _monthly_equivalent(amount, interval),
+                "currency": currency,
+            }
+        )
+    return entries
+
+
 def _get_polar_client(raise_if_missing: bool = True) -> Optional[Polar]:
     """Create a Polar SDK client. Set raise_if_missing=False for webhook background tasks."""
     if not POLAR_ACCESS_TOKEN:
@@ -70,14 +122,94 @@ def _resolve_product_id(plan_key: str) -> Optional[str]:
 
 @router.get("/plans")
 async def get_subscription_plans():
-    """Get all available subscription plans (Polar product IDs included when configured)."""
-    plans = get_all_plans()
-    # Enrich with Polar product IDs where configured
-    for p in plans:
-        polar_id = _resolve_product_id(p.get("plan_key", ""))
-        if polar_id:
-            p["polar_product_id"] = polar_id
-    return SubscriptionPlanResponse(plans=plans)
+    """Get plans from Polar products with live pricing."""
+    plan_catalog = get_all_plans()
+    plan_by_key = {p["plan_key"]: p for p in plan_catalog}
+
+    response_plans = []
+    polar = _get_polar_client()
+
+    with polar as client:
+        for plan_key, env_key in POLAR_PRODUCT_ID_ENV_KEYS.items():
+            product_id = os.getenv(env_key)
+            if not product_id:
+                logger.warning("Missing Polar product mapping for plan '%s' (%s)", plan_key, env_key)
+                continue
+
+            try:
+                product_response = client.products.get(id=product_id)
+                product_obj = getattr(product_response, "product", product_response)
+            except Exception as exc:
+                logger.error("Failed loading Polar product %s for %s: %s", product_id, plan_key, exc, exc_info=True)
+                continue
+
+            plan_template = plan_by_key.get(plan_key, {})
+            product_name = _read_field(product_obj, "name", plan_template.get("name", plan_key.title()))
+            product_description = _read_field(
+                product_obj,
+                "description",
+                plan_template.get("description"),
+            )
+            price_entries = _extract_price_entries(product_obj)
+
+            # If product has no prices yet, still return the product as selectable.
+            if not price_entries:
+                response_plans.append(
+                    {
+                        "plan_key": plan_key,
+                        "id": product_id,
+                        "polar_product_id": product_id,
+                        "name": product_name,
+                        "description": product_description,
+                        "interval": "month",
+                        "price": None,
+                        "display_price": None,
+                        "currency": "usd",
+                        "contact_sales": False,
+                        "features": plan_template.get("features", []),
+                    }
+                )
+                continue
+
+            for entry in price_entries:
+                interval = entry["interval"]
+                suffix = " Yearly" if interval == "year" else ""
+                response_plans.append(
+                    {
+                        "plan_key": plan_key,
+                        "id": entry["id"] or product_id,
+                        "polar_product_id": product_id,
+                        "name": f"{product_name}{suffix}",
+                        "description": product_description,
+                        "interval": interval,
+                        "price": entry["price"],
+                        "display_price": entry["display_price"],
+                        "currency": entry["currency"],
+                        "contact_sales": False,
+                        "features": plan_template.get("features", []),
+                    }
+                )
+
+    # Keep enterprise/contact-sales visible even if no Polar product is configured.
+    for plan in plan_catalog:
+        if plan.get("contact_sales"):
+            response_plans.append(
+                {
+                    "plan_key": plan["plan_key"],
+                    "id": None,
+                    "polar_product_id": None,
+                    "name": plan["name"],
+                    "description": plan.get("description"),
+                    "interval": "custom",
+                    "price": None,
+                    "display_price": None,
+                    "currency": None,
+                    "contact_sales": True,
+                    "features": plan.get("features", []),
+                }
+            )
+
+    return SubscriptionPlanResponse(plans=response_plans)
 
 
 @router.post("/create-checkout", response_model=SubscriptionCreationResponse)

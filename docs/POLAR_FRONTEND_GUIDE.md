@@ -9,7 +9,7 @@ This guide explains how to integrate Polar.sh checkout into the InsightPilot fro
 - **Plans**: Fetch from `GET /api/polar/plans` (includes `polar_product_id` per plan).
 - **Checkout**: Call `POST /api/polar/create-checkout?product_id=<uuid>` → redirect user to `checkout_url`.
 - **Success**: User returns to your success page after payment.
-- **Status**: Use `GET /api/polar/subscription-status` (or `/api/stripe/subscription-status`) for subscription state.
+- **Status**: Use `GET /api/polar/subscription-status` for subscription state.
 
 ---
 
@@ -27,7 +27,7 @@ NEXT_PUBLIC_API_URL=https://your-api.com   # or http://localhost:8000 for dev
 // Plan from GET /api/polar/plans
 interface SubscriptionTier {
   plan_key: string;
-  id: string | null;           // Stripe price ID (null for contact-sales)
+  id: string | null;           // Polar price/plan ID (null for contact-sales)
   polar_product_id: string | null;  // Polar product UUID – use for Polar checkout
   name: string;
   description: string | null;
@@ -108,7 +108,7 @@ async function createPolarCheckout(
 // Usage in a button handler
 async function handleSubscribe(plan: SubscriptionTier) {
   if (!plan.polar_product_id) {
-    // Contact sales or use Stripe
+    // Contact sales
     return;
   }
   const checkoutUrl = await createPolarCheckout(plan.polar_product_id, accessToken);
@@ -132,7 +132,6 @@ import { useEffect, useState } from "react";
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams();
   const checkoutId = searchParams.get("checkout_id");
-  const sessionId = searchParams.get("session_id"); // Stripe uses this
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
 
   useEffect(() => {
@@ -162,7 +161,7 @@ export default function CheckoutSuccessPage() {
 
 ## 4. Subscription Status
 
-Use either endpoint; both return the same shape for Stripe and Polar subscriptions:
+Use the Polar endpoint:
 
 ```typescript
 async function fetchSubscriptionStatus(accessToken: string): Promise<SubscriptionStatus> {
@@ -204,9 +203,6 @@ export default function PricingPage() {
       const token = getAccessToken(); // your auth helper
       const url = await createPolarCheckout(plan.polar_product_id, token);
       window.location.href = url;
-    } else {
-      // Fallback to Stripe if no polar_product_id
-      // ... existing Stripe checkout logic
     }
   };
 
@@ -252,23 +248,11 @@ if (!res.ok) {
 
 ---
 
-## 7. Stripe vs Polar
+## 7. Polar-Only Notes
 
-- **Stripe plans**: Use `id` (Stripe price ID) and `POST /api/stripe/create-checkout-session`.
-- **Polar plans**: Use `polar_product_id` and `POST /api/polar/create-checkout`.
-
-You can support both by checking which ID is present:
-
-```typescript
-if (plan.polar_product_id) {
-  // Polar checkout
-  const url = await createPolarCheckout(plan.polar_product_id, token);
-  window.location.href = url;
-} else if (plan.id) {
-  // Stripe checkout
-  // ... existing Stripe flow
-}
-```
+- The backend is Polar-only: there is no Stripe checkout fallback path.
+- `/api/polar/plans` returns live Polar pricing from configured products.
+- Use `polar_product_id` for checkout creation.
 
 ---
 
@@ -280,3 +264,52 @@ if (plan.polar_product_id) {
 - [ ] User redirected to `checkout_url`
 - [ ] Success page at `/dashboard/checkout/success` (or path matching `POLAR_SUCCESS_URL`)
 - [ ] Subscription status refreshed after success redirect
+
+---
+
+## 9. Production Readiness (Required)
+
+### Backend and Polar configuration
+
+- [ ] `POLAR_ACCESS_TOKEN` is valid (not expired/revoked) for the correct organization
+- [ ] `POLAR_SANDBOX=false` in production
+- [ ] Production product IDs are configured (`POLAR_SOLOPRENEUR_PRODUCT_ID`, `POLAR_ENTREPRENEUR_PRODUCT_ID`)
+- [ ] Webhook endpoint is public HTTPS and set to `/api/polar/webhook`
+- [ ] Webhook secret in app env exactly matches Polar endpoint secret
+- [ ] Webhook events enabled: `order.paid`, `subscription.active`, `subscription.updated`, `subscription.canceled`, `subscription.revoked`
+
+### Frontend behavior
+
+- [ ] Pricing UI handles `contact_sales` plans (no checkout button)
+- [ ] Checkout button is disabled while checkout session is being created
+- [ ] User-facing error is shown when checkout creation fails
+- [ ] Success page re-fetches subscription status after redirect
+
+### Security and operations
+
+- [ ] Access token is stored only in backend env (never exposed to client)
+- [ ] Webhook endpoint is excluded from auth middleware (signature validation only)
+- [ ] API logs include enough context to debug failed webhook events
+- [ ] At least one end-to-end test purchase completed in sandbox and prod
+
+---
+
+## 10. Smoke Tests Before Launch
+
+### Validate Polar token quickly
+
+```bash
+python -c "from dotenv import load_dotenv; import os; load_dotenv('app/.env'); from polar_sdk import Polar; p=Polar(access_token=os.getenv('POLAR_ACCESS_TOKEN'), server='sandbox' if os.getenv('POLAR_SANDBOX','').lower() in ('1','true','yes') else None); \
+from contextlib import suppress; \
+with p as c: \
+    r=c.organizations.list(limit=1); \
+    print('token_ok', r is not None)"
+```
+
+If you get `401 invalid_token`, rotate/regenerate `POLAR_ACCESS_TOKEN` in Polar dashboard and update env.
+
+### Verify webhook delivery
+
+1. Trigger a test checkout payment.
+2. Confirm Polar dashboard shows webhook deliveries as `2xx`.
+3. Confirm your DB user row is updated (`polar_subscription_id`, `subscription_status`).

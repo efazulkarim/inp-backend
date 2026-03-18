@@ -23,20 +23,52 @@ if not env_found:
     print("[LLM Service] ⚠️ WARNING: No .env file found!")
 
 # LLM Provider Configuration
+
+# OpenRouter Configuration (Primary - Production Recommended)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_API_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_CHAT_MODEL = os.getenv("OPENROUTER_CHAT_MODEL", "deepseek/deepseek-r1-distill-llama-70b")
+
+# ApiFreeLLM Configuration (Backup - Free Forever)
+APIFREELL_API_KEY = os.getenv("APIFREELL_API_KEY")
+APIFREELL_API_BASE_URL = "https://api.apifreellm.com/v1"
+APIFREELL_CHAT_MODEL = os.getenv("APIFREELL_CHAT_MODEL", "deepseek-r1-distill-llama-70b")
+
+# GLM Configuration (Tertiary)
 GLM_API_KEY = os.getenv("GLM_API_KEY")
 GLM_API_BASE_URL = "https://api.z.ai/api/coding/paas/v4"
 GLM_CHAT_MODEL = os.getenv("GLM_CHAT_MODEL", "glm-4.5")  # glm-5 requires Max plan
 
+# Vultr Configuration (Fallback)
 VULTR_API_KEY = os.getenv("VULTR_API_KEY")
 VULTR_API_BASE_URL = "https://api.vultrinference.com/v1"
 VULTR_CHAT_MODEL = "deepseek-r1-distill-qwen-32b"
 
-# Active provider: prefer GLM when key is set, else Vultr
-USE_GLM = bool(GLM_API_KEY)
-ACTIVE_API_KEY = GLM_API_KEY if USE_GLM else VULTR_API_KEY
-ACTIVE_API_BASE_URL = GLM_API_BASE_URL if USE_GLM else VULTR_API_BASE_URL
-ACTIVE_CHAT_MODEL = GLM_CHAT_MODEL if USE_GLM else VULTR_CHAT_MODEL
-PROVIDER_NAME = "GLM" if USE_GLM else "Vultr"
+# Provider priority: OpenRouter > ApiFreeLLM > GLM > Vultr
+USE_OPENROUTER = bool(OPENROUTER_API_KEY)
+USE_APIFREELL = not USE_OPENROUTER and bool(APIFREELL_API_KEY)
+USE_GLM = not USE_OPENROUTER and not USE_APIFREELL and bool(GLM_API_KEY)
+
+if USE_OPENROUTER:
+    ACTIVE_API_KEY = OPENROUTER_API_KEY
+    ACTIVE_API_BASE_URL = OPENROUTER_API_BASE_URL
+    ACTIVE_CHAT_MODEL = OPENROUTER_CHAT_MODEL
+    PROVIDER_NAME = "OpenRouter"
+elif USE_APIFREELL:
+    ACTIVE_API_KEY = APIFREELL_API_KEY
+    ACTIVE_API_BASE_URL = APIFREELL_API_BASE_URL
+    ACTIVE_CHAT_MODEL = APIFREELL_CHAT_MODEL
+    PROVIDER_NAME = "ApiFreeLLM"
+elif USE_GLM:
+    ACTIVE_API_KEY = GLM_API_KEY
+    ACTIVE_API_BASE_URL = GLM_API_BASE_URL
+    ACTIVE_CHAT_MODEL = GLM_CHAT_MODEL
+    PROVIDER_NAME = "GLM"
+else:
+    ACTIVE_API_KEY = VULTR_API_KEY
+    ACTIVE_API_BASE_URL = VULTR_API_BASE_URL
+    ACTIVE_CHAT_MODEL = VULTR_CHAT_MODEL
+    PROVIDER_NAME = "Vultr"
 
 
 def _get_error_response(

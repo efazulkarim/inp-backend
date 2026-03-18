@@ -301,11 +301,11 @@ class CustomerPersonaQuestionnaireResponse(CustomerPersonaQuestionnaireBase):
 class SubscriptionTier(BaseModel):
     """Schema representing a subscription plan/price option returned to the frontend."""
     plan_key: str  # e.g. "solopreneur", "entrepreneur"
-    id: Optional[str] = None  # Stripe price ID (None for contact-sales plans)
+    id: Optional[str] = None  # Provider plan/price ID (None for contact-sales plans)
     polar_product_id: Optional[str] = None  # Polar product UUID when using Polar
     name: str
     description: Optional[str] = None
-    price: Optional[float] = None  # Raw Stripe price amount (e.g. 312 for yearly)
+    price: Optional[float] = None  # Price in major units (e.g. 29.0 USD)
     display_price: Optional[float] = None  # Price to display per month (yearly → divided by 12)
     currency: Optional[str] = "usd"
     interval: Optional[str] = None  # "month", "year" or "custom"
