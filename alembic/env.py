@@ -10,7 +10,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 # Import your models here. Crucially, import SQLALCHEMY_DATABASE_URL
 # from app.database.py which has the robust .env loading.
-from app.database import Base, SQLALCHEMY_DATABASE_URL
+from app.database import Base
+from app.core.config import get_settings
 from app import models  # This will import all models
 
 # this is the Alembic Config object, which provides
@@ -21,9 +22,18 @@ config = context.config
 fileConfig(config.config_file_name)
 
 # Set the sqlalchemy.url in the Alembic config *before* it's used by engine_from_config.
-# app.database raises ValueError if DATABASE_URL is not set, so we always have a valid URL here.
-escaped_db_url = SQLALCHEMY_DATABASE_URL.replace('%', '%%')
-config.set_main_option("sqlalchemy.url", escaped_db_url)
+# This ensures that the DATABASE_URL loaded from .env by app/database.py is used.
+settings = get_settings()
+database_url = settings.database_url
+
+if database_url:
+    print(f"[alembic/env.py] 💡 Original sqlalchemy.url from app.database: {database_url}")
+    # Escape '%' for configparser by replacing it with '%%'
+    escaped_db_url = database_url.replace('%', '%%')
+    print(f"[alembic/env.py] 💡 Setting Alembic's sqlalchemy.url (escaped for configparser): {escaped_db_url}")
+    config.set_main_option("sqlalchemy.url", escaped_db_url)
+else:
+    print("[alembic/env.py] ⚠️ WARNING: DATABASE_URL from settings is not set. Alembic might use a default from alembic.ini or fail.")
 
 # Set the target metadata for 'autogenerate' support
 target_metadata = Base.metadata
