@@ -1,9 +1,40 @@
-__pycache__
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment and secrets
 .env
 .env.local
 .env.*.local
-venv/*
-.venv/*
-env/*
 .env.test
-.vercel
+!.env.example
+
+# Local databases and generated files
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor and OS files
+.vscode/*
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Deployment/tool caches
+.vercel/

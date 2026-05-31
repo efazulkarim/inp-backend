@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv("d:/saas/inp-backend/app/.env")
+load_dotenv()
 from polar_sdk import Polar
 
 polar = Polar(access_token=os.getenv("POLAR_ACCESS_TOKEN"), server=None)

@@ -31,7 +31,7 @@ def upgrade() -> None:
         # Table doesn't exist - this migration should be skipped for fresh databases
         # Tables should be created via create_tables.py first, then stamp with: alembic stamp head
         print("⚠️  Note: 'users' table does not exist. Skipping migration.")
-        print("   For fresh databases, create tables first with: python create_tables.py")
+        print("   For fresh databases, create tables first with: python scripts/database/create_tables.py")
         print("   Then stamp the database with: alembic stamp head")
         return
     

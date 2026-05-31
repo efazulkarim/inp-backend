@@ -7,8 +7,8 @@ def test_connection():
     print("Attempting to load .env file...")
     # Try multiple possible locations for the .env file (same logic as app/database.py)
     possible_env_paths = [
-        os.path.join(os.path.dirname(__file__), '.env'),  # project root
-        os.path.join(os.path.dirname(__file__), 'app', '.env'),  # app directory
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env'),  # project root
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'app', '.env'),  # app directory
         '.env'  # current working directory
     ]
     

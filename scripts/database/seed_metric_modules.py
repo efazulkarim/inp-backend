@@ -5,12 +5,15 @@ Modules are optional add-on validation dimensions that users can enable per-idea
 on top of the core 11-step questionnaire.
 """
 import json
-import os
 import sys
+from pathlib import Path
+
+# Ensure app imports resolve when this script is run by path.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 from datetime import datetime
 
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
-sys.path.append(project_root)
 
 from app.database import SessionLocal
 from app.models import MetricModule, Questionnaire

@@ -4,6 +4,13 @@ Script to set up a fresh database by creating all tables and stamping migrations
 This is useful when migrating to a new database or setting up from scratch
 """
 import sys
+from pathlib import Path
+
+# Ensure app imports resolve when this script is run by path.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from app.database import Base, engine
 from app import models  # This will import all models
 from sqlalchemy import inspect

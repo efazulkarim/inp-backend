@@ -7,7 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import engine, Base
-from app.routers import auth_routes, user_routes, answer_routes, ideaboard_routes, trash_routes, archive_routes, report_routes, customerboard_routes, stripe_routes
+from app.routers import (
+    auth_routes,
+    user_routes,
+    answer_routes,
+    ideaboard_routes,
+    trash_routes,
+    archive_routes,
+    report_routes,
+    customerboard_routes,
+    polar_routes,
+    metric_module_routes,
+)
 from app.api.health import router as health_router
 from app.core.config import get_settings
 from app.core.logging import setup_logging, CorrelationIDMiddleware, get_logger
