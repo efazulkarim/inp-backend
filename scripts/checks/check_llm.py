@@ -1,21 +1,25 @@
 """
 Test script for LLM service (GLM Coding Plan or Vultr).
-Run with: python test_llm.py
+Run with: python scripts/checks/check_llm.py
 """
 import asyncio
 import json
 import os
 import sys
+from pathlib import Path
 
-# Ensure app is on path when run from project root
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure app imports resolve when this script is run by path.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 
 # Load .env before importing llm_service
 try:
     from dotenv import load_dotenv
     for env_path in [
-        os.path.join(os.path.dirname(__file__), "app", ".env"),
-        os.path.join(os.path.dirname(__file__), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "app", ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),
     ]:
         if os.path.exists(env_path):
             load_dotenv(dotenv_path=env_path)

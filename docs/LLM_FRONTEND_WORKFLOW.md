@@ -163,7 +163,7 @@ These recent backend changes are not AI-generation logic themselves, but they af
 - Stripe checkout/subscription fallback is removed. Frontend should not call Stripe billing endpoints.
 - Report generation still enforces subscription and plan limits before queueing (`403` for inactive subscription, `429` for plan limit reached).
 - Backend startup is now strict about environment variables (`DATABASE_URL`, `SECRET_KEY`). Missing values fail fast at startup.
-- Deployment/runtime docs were added for infrastructure setup (`NEON_SETUP.md`, `VERCEL.md`) and CI was added to validate lint/import/migrations.
+- Deployment/runtime docs were added for infrastructure setup (`docs/deployment/NEON_SETUP.md`, `docs/deployment/VERCEL.md`) and CI was added to validate lint/import/migrations.
 - If your local DB is new or changed, make sure migrations are applied before testing report flows.
 
 Recommended frontend handling for these changes:

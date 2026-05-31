@@ -149,7 +149,7 @@ This document summarizes the implementation of non-breaking architectural improv
 
 ### Infrastructure Test Suite ✅
 
-- **File**: `test_infrastructure.py`
+- **File**: `scripts/checks/check_infrastructure.py`
 - **Features**:
   - Configuration system validation
   - Logging system testing
@@ -427,7 +427,7 @@ curl http://localhost:8000/health/database
 ### Running Infrastructure Tests
 
 ```bash
-python test_infrastructure.py
+python scripts/checks/check_infrastructure.py
 ```
 
 ## 🎯 Success Metrics

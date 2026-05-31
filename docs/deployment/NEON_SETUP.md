@@ -44,12 +44,12 @@ alembic upgrade head
 Or for a fresh database:
 
 ```bash
-python create_tables.py
+python scripts/database/create_tables.py
 alembic stamp head
 ```
 
 ## 4. Verify connection
 
 ```bash
-python test_db_connection.py
+python scripts/checks/check_db_connection.py
 ```

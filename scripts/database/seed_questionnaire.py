@@ -1,11 +1,13 @@
 import json
 from datetime import datetime
-import os
 import sys
+from pathlib import Path
 
-# Add project root to sys.path to allow imports from app
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__)))
-sys.path.append(project_root)
+# Ensure app imports resolve when this script is run by path.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 
 from app.database import SessionLocal, engine # Assuming your setup is in app.database
 from app.models import Questionnaire # Assuming your model is in app.models

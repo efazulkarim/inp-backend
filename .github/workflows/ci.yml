@@ -48,7 +48,7 @@ jobs:
         run: ruff check . --output-format=github
 
       - name: Create database schema
-        run: python create_tables.py
+        run: python scripts/database/create_tables.py
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
           SECRET_KEY: ci-secret-key-for-tests-only

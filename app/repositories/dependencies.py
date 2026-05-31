@@ -2,7 +2,9 @@
 Repository dependency injection and session management utilities.
 Provides factory functions and dependency injection for repositories.
 """
-from typing import Generator
+from __future__ import annotations
+
+from typing import Generator, TYPE_CHECKING
 from sqlalchemy.orm import Session
 from fastapi import Depends
 
@@ -14,6 +16,9 @@ from .questionnaire_repository import QuestionnaireRepository, AnswerRepository,
 from .report_repository import ReportRepository
 
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:
+    from ..models import IdeaBoard, User
 
 
 # Repository factory functions for dependency injection
@@ -175,7 +180,7 @@ class TestRepositoryContainer(RepositoryContainer):
             self.logger.error(f"Failed to cleanup test data: {str(e)}")
             raise
     
-    def create_test_user(self, **kwargs) -> 'User':
+    def create_test_user(self, **kwargs) -> User:
         """Create a test user with default values."""
         from ..models import User
         
@@ -197,7 +202,7 @@ class TestRepositoryContainer(RepositoryContainer):
         self.logger.debug(f"Created test user: {user.username}")
         return user
     
-    def create_test_idea(self, user_id: int, **kwargs) -> 'IdeaBoard':
+    def create_test_idea(self, user_id: int, **kwargs) -> IdeaBoard:
         """Create a test idea with default values."""
         from ..models import IdeaBoard
         
