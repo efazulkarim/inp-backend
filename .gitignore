@@ -1,5 +1,9 @@
 __pycache__
 .env
+.env.local
+.env.*.local
 venv/*
+.venv/*
 env/*
 .env.test
+.vercel

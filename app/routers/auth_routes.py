@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import logging
 from fastapi.responses import RedirectResponse, JSONResponse
 import os
-import traceback
+import secrets
 from authlib.integrations.starlette_client import OAuth
 from starlette.middleware.sessions import SessionMiddleware # Required for Oauth state
 
@@ -22,9 +22,12 @@ auth_scheme = HTTPBearer() # Keep for other auth methods if any
 
 # OAuth settings
 # Ensure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI are in your .env
+# On Vercel: GOOGLE_REDIRECT_URI can be omitted if VERCEL_URL is set (auto-built as https://$VERCEL_URL/auth/google/callback)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") # This will be used in authorize_redirect
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+if not GOOGLE_REDIRECT_URI and os.getenv("VERCEL_URL"):
+    GOOGLE_REDIRECT_URI = f"https://{os.getenv('VERCEL_URL')}/auth/google/callback"
 
 if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI]):
     logger.error("Missing Google OAuth environment variables!")
@@ -69,8 +72,9 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
         # logger.debug(f"[Google Callback] Full token: {token}") # Be cautious logging full tokens
     except Exception as e:
         logger.error(f"[Google Callback] Error authorizing access token: {e}")
-        logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"OAuth authorization failed: {str(e)}")
+        logger.debug("[Google Callback] authorize_access_token failure", exc_info=True)
+        # Avoid leaking raw exception details to the client
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth authorization failed. Please try again or contact support if the issue persists.")
 
     try:
         user_info_google = token.get('userinfo')
@@ -94,9 +98,9 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
         raise he # Re-raise HTTPExceptions directly
     except Exception as e:
         logger.error(f"[Google Callback] Error processing user information: {e}")
-        logger.error(f"[Google Callback] Full token at error: {token}") # Log token for debugging
-        logger.error(f"[Google Callback] Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to process user information: {str(e)}")
+        logger.debug("[Google Callback] userinfo processing failure", exc_info=True)
+        # Avoid leaking raw exception details to the client
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to process user information. Please try again or contact support if the issue persists.")
 
     # Check if user exists, else create
     db_user = db.query(models.User).filter(models.User.email == email).first()
@@ -104,11 +108,11 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
         logger.info(f"[Google Callback] User {email} not found. Creating new user.")
         db_user = models.User(
             email=email,
-            username=user_info_google.get('email', '').split('@')[0], # Use email part as username
+            username=user_info_google.get('email', '').split('@')[0],
             first_name=user_info_google.get('given_name', ''),
             last_name=user_info_google.get('family_name', ''),
-            password="",  # No password for OAuth users, or generate a random one if your model requires it
-            verified=True # Assume email is verified by Google
+            password=auth.hash_password(secrets.token_hex(16)),
+            verified=True,
         )
         db.add(db_user)
         db.commit()
@@ -126,7 +130,7 @@ async def google_callback_route(request: Request, db: Session = Depends(get_db))
     # Ensure FRONTEND_URL is set in your .env
     frontend_url = os.getenv('FRONTEND_URL', "https://app.insightpilot.co") # Default to root if not set
     response_url = f"{frontend_url}/oauth-success?access_token={access_token}&refresh_token={refresh_token}"
-    logger.info(f"[Google Callback] Redirecting to: {response_url}")
+    logger.info("[Google Callback] Redirecting to configured frontend callback.")
     return RedirectResponse(url=response_url)
 
 @router.post("/register", response_model=schemas.UserDisplay)
@@ -174,7 +178,7 @@ def forgot_password(request: schemas.ForgotPassword, db: Session = Depends(get_d
     if not user:
         # Don't reveal that the user doesn't exist for security reasons
         # Instead, log it and return a generic message
-        logger.info(f"Password reset requested for non-existent email: {request.email}")
+        logger.info("Password reset requested for non-existent account")
         return {"msg": "If your email is registered, you will receive a password reset link."}
     
     # Generate password reset token
@@ -182,7 +186,7 @@ def forgot_password(request: schemas.ForgotPassword, db: Session = Depends(get_d
     
     # TODO: In a real application, send an email with the reset token/link
     # For development, we'll just return the token in the response
-    logger.info(f"Password reset token generated for {user.email}: {reset_token}")
+    logger.info("Password reset token generated")
     
     # Return success message
     return {"msg": "If your email is registered, you will receive a password reset link."}
@@ -197,7 +201,7 @@ def reset_password(request: schemas.ResetPassword, db: Session = Depends(get_db)
         email = auth.verify_password_reset_token(request.token)
     except HTTPException as e:
         # Token verification failed
-        logger.warning(f"Invalid password reset token: {request.token}")
+        logger.warning("Invalid password reset token received")
         raise e
     
     # Find the user
@@ -220,3 +224,12 @@ def reset_password(request: schemas.ResetPassword, db: Session = Depends(get_db)
     
     # Return success message
     return {"msg": "Password has been reset successfully. You can now log in with your new password."}
+
+# Debug endpoint - consider removing or protecting in production
+# @router.get("/debug-oauth")
+# async def debug_oauth():
+#     return {
+#         "frontend_url": os.getenv('FRONTEND_URL'),
+#         "google_redirect_uri": os.getenv('GOOGLE_REDIRECT_URI'),
+#         "environment": os.getenv('ENVIRONMENT')
+#     }

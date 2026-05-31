@@ -1,7 +1,23 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, DateTime , JSON, Boolean
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, DateTime, JSON, Boolean
 from sqlalchemy.orm import relationship
+from sqlalchemy import TypeDecorator
 from .database import Base
 from datetime import datetime
+
+
+class IntBool(TypeDecorator):
+    """Stores bool as integer (0/1) for DB compatibility."""
+    impl = Integer
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return 1 if value else 0
+
+    def process_result_value(self, value, dialect):
+        return bool(value) if value is not None else False
+
 
 class User(Base):
     __tablename__ = "users"
@@ -16,13 +32,15 @@ class User(Base):
     role = Column(String(50), nullable=True)
     password = Column(String(255))  # Hashed password
     status = Column(Integer, default=1)
-    verified = Column(Integer, default=0)
+    verified = Column(IntBool, default=0)
 
     # Stripe subscription-related columns
     subscription_plan = Column(String(50), nullable=True)  # e.g., "free", "basic", "pro"
     subscription_status = Column(String(50), nullable=True)  # e.g., "active", "canceled"
     stripe_customer_id = Column(String(255), nullable=True, unique=True)
     stripe_subscription_id = Column(String(255), nullable=True, unique=True)
+    polar_customer_id = Column(String(255), nullable=True)
+    polar_subscription_id = Column(String(255), nullable=True)
     current_period_end = Column(DateTime, nullable=True)
     trial_end = Column(DateTime, nullable=True)
 
@@ -54,6 +72,7 @@ class Questionnaire(Base):
     remarks = Column(Text)
     input_type = Column(String(100))
     range = Column(Text)
+    module_slug = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
     status = Column(Integer)
@@ -190,4 +209,31 @@ class IdeaPersonaLink(Base):
     # Relationships
     idea = relationship("IdeaBoard")
     persona = relationship("CustomerPersona")
+    user = relationship("User")
+
+
+class MetricModule(Base):
+    __tablename__ = "metric_modules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    max_score = Column(Integer, default=9)
+    is_default = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class IdeaModuleSelection(Base):
+    __tablename__ = "idea_module_selections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    idea_id = Column(Integer, ForeignKey("ideaboard.id"), nullable=False)
+    module_id = Column(Integer, ForeignKey("metric_modules.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    idea = relationship("IdeaBoard")
+    module = relationship("MetricModule")
     user = relationship("User")

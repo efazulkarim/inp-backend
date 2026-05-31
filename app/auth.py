@@ -10,7 +10,7 @@ possible_env_paths = [
 env_found = False
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"[auth.py] 💡 Found .env file at: {env_path}")
+        print(f"[auth.py] Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
         env_found = True
         break
@@ -33,7 +33,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 90))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7))  # Refresh token expiration period
 
 # Secret key and algorithm for JWT
-SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable not set. Application cannot start.")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 # Password hashing context
@@ -61,7 +63,7 @@ def create_access_token(data: dict):
 # JWT Token creation for refresh token
 def create_refresh_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 

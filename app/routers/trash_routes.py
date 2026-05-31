@@ -92,9 +92,9 @@ def restore_from_trash(
         db.delete(trash_item)
         db.commit()
         return {"msg": "Idea restored successfully"}
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error restoring idea: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error restoring idea")
 
 # Delete all trash for the current user
 @router.delete("/delete-all-trash", response_model=MessageResponse)
@@ -119,7 +119,7 @@ async def cleanup_old_trash(db: Session):
         # Delete items older than 7 days
         db.query(Trash).filter(Trash.deleted_at <= cutoff_date).delete()
         db.commit()
-    except Exception as e:
-        print(f"Error cleaning up old trash: {str(e)}")
+    except Exception:
+        print("Error cleaning up old trash")
     finally:
         db.close()

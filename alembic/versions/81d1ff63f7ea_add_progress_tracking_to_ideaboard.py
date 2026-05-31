@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -19,14 +20,36 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add new columns to ideaboard table
-    op.add_column('ideaboard', sa.Column('current_step', sa.Integer(), nullable=False, server_default='0'))
-    op.add_column('ideaboard', sa.Column('is_complete', sa.Boolean(), nullable=False, server_default='0'))
-    op.add_column('ideaboard', sa.Column('completed_steps', sa.JSON(), nullable=True))
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    tables = inspector.get_table_names()
+
+    if 'ideaboard' not in tables:
+        return
+
+    columns = [col['name'] for col in inspector.get_columns('ideaboard')]
+
+    if 'current_step' not in columns:
+        op.add_column('ideaboard', sa.Column('current_step', sa.Integer(), nullable=False, server_default='0'))
+    if 'is_complete' not in columns:
+        op.add_column('ideaboard', sa.Column('is_complete', sa.Boolean(), nullable=False, server_default='0'))
+    if 'completed_steps' not in columns:
+        op.add_column('ideaboard', sa.Column('completed_steps', sa.JSON(), nullable=True))
 
 
 def downgrade() -> None:
-    # Remove columns if needed to rollback
-    op.drop_column('ideaboard', 'completed_steps')
-    op.drop_column('ideaboard', 'is_complete')
-    op.drop_column('ideaboard', 'current_step')
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    tables = inspector.get_table_names()
+
+    if 'ideaboard' not in tables:
+        return
+
+    columns = [col['name'] for col in inspector.get_columns('ideaboard')]
+
+    if 'completed_steps' in columns:
+        op.drop_column('ideaboard', 'completed_steps')
+    if 'is_complete' in columns:
+        op.drop_column('ideaboard', 'is_complete')
+    if 'current_step' in columns:
+        op.drop_column('ideaboard', 'current_step')

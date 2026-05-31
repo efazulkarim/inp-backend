@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Lint with Ruff
+        run: ruff check . --output-format=github
+
+      - name: Create database schema
+        run: python create_tables.py
+        env:
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+          SECRET_KEY: ci-secret-key-for-tests-only
+
+      - name: "Stamp Alembic (fresh DB: schema from models, mark migrations applied)"
+        run: alembic stamp head
+        env:
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+          SECRET_KEY: ci-secret-key-for-tests-only
+
+      - name: Verify Alembic migrations
+        run: alembic check
+        env:
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+          SECRET_KEY: ci-secret-key-for-tests-only
+
+      - name: Import check (app loads)
+        run: python -c "from app.main import app; print('App loaded OK')"
+        env:
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+          SECRET_KEY: ci-secret-key-for-tests-only

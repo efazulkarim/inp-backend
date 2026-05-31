@@ -18,8 +18,10 @@ class SubscriptionService:
     
     @staticmethod
     async def get_user_subscription_details(user: User) -> Dict[str, Any]:
-        """Get the subscription details for a user"""
-        if not user.subscription_plan or not user.stripe_subscription_id:
+        """Get the subscription details for a user (Stripe or Polar)."""
+        has_stripe = bool(user.stripe_subscription_id)
+        has_polar = bool(user.polar_subscription_id)
+        if not user.subscription_plan or (not has_stripe and not has_polar):
             return {
                 "status": "inactive",
                 "plan": None,

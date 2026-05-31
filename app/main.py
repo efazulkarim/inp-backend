@@ -97,7 +97,7 @@ else:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins, # Ensure this list is correctly configured for your environments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -163,11 +163,14 @@ app.include_router(trash_routes.router, prefix="/api/trash", tags=["trash"])
 app.include_router(archive_routes.router, prefix="/archive", tags=["Archive"])
 app.include_router(report_routes.router, prefix="/api/report", tags=["report"])
 app.include_router(customerboard_routes.router, prefix="/api/customerboard", tags=["customerboard"])
-app.include_router(stripe_routes.router, prefix="/api/stripe", tags=["stripe"])
+app.include_router(polar_routes.router, prefix="/api/polar", tags=["polar"])
+app.include_router(metric_module_routes.router, prefix="/api/ideaboard", tags=["metric-modules"])
 
 
 @auth_routes.router.get("/debug-oauth")
 async def debug_oauth():
+    if os.getenv("ENVIRONMENT", "development").lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     return {
         "frontend_url": settings.frontend_url,
         "google_redirect_uri": settings.google_redirect_uri,

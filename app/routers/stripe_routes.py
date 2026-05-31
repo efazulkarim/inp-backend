@@ -20,6 +20,9 @@ from fastapi.responses import JSONResponse
 import json
 from typing import Optional
 from fastapi.security import HTTPBearer
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Robust .env loading (similar to llm_service.py)
 possible_env_paths = [
@@ -32,7 +35,7 @@ possible_env_paths = [
 env_found = False
 for env_path in possible_env_paths:
     if os.path.exists(env_path):
-        print(f"[Stripe Routes] 💡 Found .env file at: {env_path}")
+        print(f"[Stripe Routes] Found .env file at: {env_path}")
         load_dotenv(dotenv_path=env_path)
         env_found = True
         break
@@ -43,16 +46,9 @@ if not env_found:
 # Set Stripe API Key and print debug info
 stripe_key = os.getenv("STRIPE_SECRET_KEY")
 stripe.api_key = stripe_key
-print(f"[Stripe Routes] 🔑 Stripe API Key: {'Found (starts with ' + stripe_key[:7] + '...)' if stripe_key else 'NOT FOUND!'}")
 
 # Get webhook secret and print debug info
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-print(f"[Stripe Routes] 🔒 Stripe Webhook Secret: {'Found (starts with ' + STRIPE_WEBHOOK_SECRET[:7] + '...)' if STRIPE_WEBHOOK_SECRET else 'NOT FOUND!'}")
-
-# Debug: Print all important env vars to help troubleshoot
-print(f"[Stripe Routes] 🌐 Frontend URL: {os.getenv('FRONTEND_URL', 'NOT SET')}")
-print(f"[Stripe Routes] 📧 Solopreneur Price ID: {os.getenv('STRIPE_SOLOPRENEUR_PRICE_ID', 'NOT SET')}")
-print(f"[Stripe Routes] 🚀 Entrepreneur Price ID: {os.getenv('STRIPE_ENTREPRENEUR_PRICE_ID', 'NOT SET')}")
 
 router = APIRouter()
 security = HTTPBearer()
@@ -64,7 +60,8 @@ async def get_subscription_plans():
         plans = await SubscriptionService.get_all_subscription_plans()
         return SubscriptionPlanResponse(plans=plans)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error getting subscription plans: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not retrieve subscription plans. Please try again later.")
 
 @router.post("/create-checkout-session", response_model=SubscriptionCreationResponse)
 async def create_checkout_session(
@@ -74,12 +71,10 @@ async def create_checkout_session(
     db: Session = Depends(get_db)
 ):
     try:
-        # Debug: Print API key info
-        print(f"🔍 Current Stripe API Key: {'SET (starts with ' + stripe.api_key[:4] + '...)' if stripe.api_key else 'NOT SET!'}")
         if not stripe.api_key:
             # Fallback: Try to set it again
             stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-            print(f"⚠️ API Key re-set attempt: {'Success' if stripe.api_key else 'Failed'}")
+            logger.warning("Stripe API key was missing at runtime. Reloaded from env.")
         
         # Check if user already has a Stripe customer ID
         if not current_user.stripe_customer_id:
@@ -115,7 +110,8 @@ async def create_checkout_session(
             checkout_url=session.url
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error creating checkout session for user {current_user.email}, price_id {price_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not create checkout session. Please try again later.")
 
 @router.post("/webhook")
 async def stripe_webhook(
@@ -126,45 +122,29 @@ async def stripe_webhook(
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
-    # Debug output for troubleshooting
-    print(f"[Stripe Webhook] 🔥 Incoming webhook request")
-    print(f"[Stripe Webhook] 📝 Signature header: {'Present' if sig_header else 'MISSING'}")
-    print(f"[Stripe Webhook] 🔒 Using webhook secret: {'Set' if STRIPE_WEBHOOK_SECRET else 'NOT SET'}")
-
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, STRIPE_WEBHOOK_SECRET
         )
-        print(f"[Stripe Webhook] ✅ Event signature verified successfully")
-    except ValueError as e:
-        print(f"[Stripe Webhook] ❌ Invalid payload: {e}")
+    except ValueError:
+        logger.warning("[Stripe Webhook] Invalid payload")
         raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError as e:
-        print(f"[Stripe Webhook] ❌ Signature verification failed: {e}")
+    except stripe.error.SignatureVerificationError:
+        logger.warning("[Stripe Webhook] Signature verification failed")
         raise HTTPException(status_code=400, detail="Invalid signature")
-
-    # Debug: Print event type
-    print(f"[Stripe Webhook] 🎯 Event type: {event['type']}")
+    logger.info("[Stripe Webhook] Event received: %s", event["type"])
 
     # Handle various webhook events
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        print(f"[Stripe Webhook] 🔥 Processing checkout.session.completed")
-        
-        # Debug: Print metadata
-        print(f"[Stripe Webhook] 📋 Session metadata: {session.get('metadata', {})}")
         
         # Extract data
         user_id = session['metadata']['user_id']
         subscription_id = session.get('subscription')
         customer_id = session['customer']
         
-        print(f"[Stripe Webhook] 👤 User ID from metadata: {user_id}")
-        print(f"[Stripe Webhook] 📋 Subscription ID: {subscription_id}")
-        
         # Retrieve subscription details
         subscription = stripe.Subscription.retrieve(subscription_id)
-        print(f"[Stripe Webhook] 📊 Subscription status: {subscription['status']}")
         
         # Safely extract dates (might not exist for new subscriptions)
         current_period_end = None
@@ -172,22 +152,17 @@ async def stripe_webhook(
         
         if subscription.get('current_period_end'):
             current_period_end = datetime.fromtimestamp(subscription['current_period_end'])
-            print(f"[Stripe Webhook] 📅 Current period end: {current_period_end}")
         
         if subscription.get('trial_end'):
             trial_end = datetime.fromtimestamp(subscription['trial_end'])
-            print(f"[Stripe Webhook] 🆓 Trial end: {trial_end}")
         
         # Get product details
         product_id = subscription['items']['data'][0]['price']['product']
         product = stripe.Product.retrieve(product_id)
-        print(f"[Stripe Webhook] 🏷️ Product name: {product['name']}")
         
         # Update user in database
         user = db.query(User).filter(User.id == user_id).first()
-        print(f"[Stripe Webhook] 🔥 USER FOUND? {bool(user)}")
         if user:
-            print(f"[Stripe Webhook] 📝 Updating user {user.id} with subscription data")
             user.stripe_customer_id = customer_id
             user.stripe_subscription_id = subscription_id
             user.subscription_plan = product['name']
@@ -195,10 +170,6 @@ async def stripe_webhook(
             user.current_period_end = current_period_end
             user.trial_end = trial_end
             db.commit()
-            print(f"[Stripe Webhook] ✅ User {user.id} updated successfully - Status: {subscription['status']}, Plan: {product['name']}")
-        else:
-            print(f"[Stripe Webhook] ❌ No user found with ID: {user_id}")
-
             # Send invoice in background
             background_tasks.add_task(
                 send_invoice_email,
@@ -207,6 +178,8 @@ async def stripe_webhook(
                 currency=session['currency'],
                 subscription_plan=product['name']
             )
+        else:
+            logger.warning("[Stripe Webhook] No user found for user_id=%s", user_id)
     
     elif event['type'] == 'customer.subscription.deleted':
         subscription = event['data']['object']
@@ -276,7 +249,8 @@ async def cancel_subscription(
         
         return {"message": "Subscription canceled successfully"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error canceling subscription for user {current_user.email}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not cancel subscription. Please try again later.")
 
 @router.post("/create-portal-session", response_model=SubscriptionPortalResponse)
 async def create_portal_session(
@@ -295,7 +269,8 @@ async def create_portal_session(
 
         return SubscriptionPortalResponse(portal_url=session.url)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error creating portal session for user {current_user.email}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not create portal session. Please try again later.")
 
 @router.get("/subscription-status", response_model=SubscriptionStatus)
 async def get_subscription_status(
@@ -318,7 +293,8 @@ async def get_subscription_status(
             cancel_at_period_end=subscription_details["cancel_at_period_end"]
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error fetching subscription status for user {current_user.email}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not retrieve subscription status. Please try again later.")
 
 @router.post("/update-subscription")
 async def update_subscription(
@@ -334,12 +310,15 @@ async def update_subscription(
             db=db
         )
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as ve: # Specific exception for user not found or invalid plan
+        logger.warning(f"ValueError during subscription update for user {current_user.email}, price_id {update_request.price_id}: {ve}")
+        raise HTTPException(status_code=404, detail=str(ve)) # Can expose str(ve) as it's a custom message
+    except stripe.error.StripeError as se:
+        logger.error(f"StripeError during subscription update for user {current_user.email}, price_id {update_request.price_id}: {se}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Stripe error: {se.user_message or 'Could not process payment or update.'}")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Unexpected error during subscription update for user {current_user.email}, price_id {update_request.price_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not update subscription. Please try again later.")
 
 async def send_invoice_email(user_email: str, amount: float, currency: str, subscription_plan: str):
     """
@@ -348,7 +327,7 @@ async def send_invoice_email(user_email: str, amount: float, currency: str, subs
     You can use libraries like fastapi-mail or python-jose for this
     """
     # TODO: Implement your email sending logic
-    print(f"Sending invoice email to {user_email} for {amount} {currency} - {subscription_plan}")
+    logger.info("Invoice email task queued for %s", user_email)
     pass
 
 async def send_payment_failed_email(user_email: str, amount: float, currency: str):
@@ -357,5 +336,5 @@ async def send_payment_failed_email(user_email: str, amount: float, currency: st
     Note: Implement your email sending logic here
     """
     # TODO: Implement your email sending logic
-    print(f"Sending payment failed email to {user_email} for {amount} {currency}")
-    pass 
+    logger.info("Payment failed email task queued for %s", user_email)
+    pass

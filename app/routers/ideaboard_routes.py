@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
@@ -9,6 +10,48 @@ from app.database import get_db
 import json
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+QUESTION_ID_PREFIX_TEMPLATE = "step_{step}_"
+
+
+def _extract_step_question_id(q_uuid: str, step: int) -> str:
+    """
+    Extract stable question ID from q_uuid without breaking IDs containing underscores.
+    Example: step_2_main_problem -> main_problem
+    """
+    prefix = QUESTION_ID_PREFIX_TEMPLATE.format(step=step)
+    base_id = q_uuid[len(prefix):] if q_uuid.startswith(prefix) else q_uuid.split("_")[-1]
+    
+    mapping = {
+        "audience_characteristics": "characteristics",
+        "customer_personas": "customer_personas_created",
+        "problem_description": "problem_description_type",
+        "customer_solutions": "current_solutions_type",
+        "validated_problem": "problem_validated",
+        "validation_description": "validation_method",
+        "market_demand_drivers": "driving_demand",
+        "swot_product": "swot_your_product",
+        "willing_to_pay": "willingness_to_pay",
+        "tracking_metrics": "measure_metrics",
+        "progress_milestones": "milestones",
+        "profitable_solution": "profitability",
+        "consequences": "consequences_of_not_solving",
+        "urgency": "problem_urgency",
+        "costs": "financial_emotional_costs",
+        "product_service": "product_service_offering",
+        "before_product_use": "customer_life_before",
+        "after_product_use": "customer_life_after",
+        "solution_solves_problem": "how_solution_solves_problem",
+        "better_than_alternatives": "why_solution_better",
+        "emotional_benefits": "emotional_psychological_benefits",
+        "right_time_introduction": "timing_introduction",
+        "other_primary_benefits_text": "other_primary_benefit_specify",
+        "other_emotional_benefits_text": "other_emotional_benefit_specify",
+        "other_market_demand_text": "other_driving_demand_specify",
+    }
+    reverse_mapping = {v: k for k, v in mapping.items()}
+    return reverse_mapping.get(base_id, base_id)
 
 @router.post("/create-idea/", response_model=schemas.IdeaResponse)
 async def create_idea(
@@ -28,8 +71,8 @@ async def create_idea(
         db.commit()
         db.refresh(new_idea)
         return new_idea
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error creating idea: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Error creating idea")
 
 @router.get("/questions/{step}", response_model=schemas.QuestionnaireResponse)
 async def get_step_questions(
@@ -43,7 +86,7 @@ async def get_step_questions(
     
     questions = db.query(Questionnaire).filter(
         Questionnaire.status == 1,
-        Questionnaire.q_uuid.startswith(f"step_{step}_")
+        Questionnaire.q_uuid.like(f"step\\_{step}\\_%", escape="\\")
     ).all()
     
     if not questions:
@@ -73,14 +116,30 @@ async def save_step_data(
         raise HTTPException(status_code=404, detail="Idea not found")
     
     try:
+        if step_data.step_number != step:
+            raise HTTPException(
+                status_code=400,
+                detail=f"step_number ({step_data.step_number}) must match URL step ({step})",
+            )
+
         # Get questions for this step to map IDs to database questions
         questions = db.query(Questionnaire).filter(
             Questionnaire.status == 1,
-            Questionnaire.q_uuid.startswith(f"step_{step}_")
+            Questionnaire.q_uuid.like(f"step\\_{step}\\_%", escape="\\")
         ).all()
+
+        if not questions:
+            raise HTTPException(status_code=404, detail=f"No questions found for step {step}")
         
         # Create a mapping of question identifiers to DB IDs
-        question_map = {q.q_uuid.split('_')[-1]: q.id for q in questions}
+        question_map = {_extract_step_question_id(q.q_uuid, step): q.id for q in questions}
+        allowed_question_ids = set(question_map.keys())
+
+        submitted_question_ids = [q.id for q in step_data.questions]
+        unknown_question_ids = [qid for qid in submitted_question_ids if qid not in allowed_question_ids]
+        if unknown_question_ids:
+            # Just ignore unknown question IDs from frontend (e.g. 'other' text fields not strictly in DB)
+            print(f"Warning: Ignoring unknown question IDs for step {step}: {unknown_question_ids}")
         
         # Save each answer
         for question in step_data.questions:
@@ -104,13 +163,13 @@ async def save_step_data(
                 else:
                     new_answer = Answer(
                         question_id=db_question_id,
-                    ideaBoard_id=idea_id,
-                    user_id=current_user.id,
-                    answer=answer_data,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
-                )
-                db.add(new_answer)
+                        ideaBoard_id=idea_id,
+                        user_id=current_user.id,
+                        answer=answer_data,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    db.add(new_answer)
         
         # Update progress tracking
         if not idea.completed_steps:
@@ -139,9 +198,13 @@ async def save_step_data(
             "is_complete": idea.is_complete
         }
     
-    except Exception as e:
+    except HTTPException:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error saving answers: {str(e)}")
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed saving ideaboard step %s for idea %s: %s", step, idea_id, exc)
+        raise HTTPException(status_code=400, detail="Error saving answers")
 
 @router.get("/progress/{idea_id}", response_model=schemas.IdeaProgressResponse)
 async def get_idea_progress(
@@ -191,7 +254,7 @@ async def get_step_data(
     
     questions = db.query(Questionnaire).filter(
         Questionnaire.status == 1,
-        Questionnaire.q_uuid.startswith(f"step_{step}_")
+        Questionnaire.q_uuid.like(f"step\\_{step}\\_%", escape="\\")
     ).all()
     
     if not questions:
@@ -223,10 +286,9 @@ async def get_step_data(
     question_details = []
     for q in questions:
         # Extract the question ID from the q_uuid
-        # Assuming format: step_1_question_id
+        # Format: step_{step}_{question_id}
         try:
-            parts = q.q_uuid.split('_')
-            question_id = parts[-1]
+            question_id = _extract_step_question_id(q.q_uuid, step)
         except:
             question_id = f"q_{q.id}"
             
@@ -323,9 +385,9 @@ async def link_persona_to_idea(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         # If persona linking fails (e.g., table doesn't exist), return an error
-        print(f"Error linking persona to idea: {str(e)}")
+        print("Error linking persona to idea")
         raise HTTPException(status_code=500, detail="Persona linking is not available at this time")
 
 @router.get("/ideas/{idea_id}/personas", response_model=schemas.IdeaPersonasResponse)
@@ -357,9 +419,9 @@ async def get_idea_personas(
             ).first()
             if persona:
                 personas.append(persona)
-    except Exception as e:
+    except Exception:
         # If persona linking fails (e.g., table doesn't exist), return empty list
-        print(f"Warning: Could not load linked personas for idea {idea_id}: {str(e)}")
+        print(f"Warning: Could not load linked personas for idea {idea_id}")
         personas = []
     
     return {
@@ -401,7 +463,7 @@ async def unlink_persona_from_idea(
         return {"message": "Persona unlinked successfully"}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         # If persona unlinking fails (e.g., table doesn't exist), return an error
-        print(f"Error unlinking persona from idea: {str(e)}")
+        print("Error unlinking persona from idea")
         raise HTTPException(status_code=500, detail="Persona unlinking is not available at this time")

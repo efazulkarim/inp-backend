@@ -1,25 +1,33 @@
-import os
-import tempfile
+"""
+PDF report generation service.
+Uses in-memory BytesIO for serverless compatibility (no temp files on ephemeral filesystem).
+"""
+from io import BytesIO
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
-async def generate_report_pdf(report_data, idea_name):
-    """Generate a PDF report from the report data"""
-    # Create a temporary file
-    temp_dir = tempfile.gettempdir()
-    output_path = os.path.join(temp_dir, f"{idea_name.replace(' ', '_')}_Report.pdf")
-    
-    # Create the PDF document
+# Layout constants
+PAGE_MARGIN_POINTS = 72
+PAGE_NUMBER_FONT_SIZE = 8
+
+
+async def generate_report_pdf(report_data: dict, idea_name: str) -> bytes:
+    """
+    Generate a PDF report from the report data.
+    Returns PDF bytes for streaming (serverless-safe, no temp files).
+    """
+    buffer = BytesIO()
+
     doc = SimpleDocTemplate(
-        output_path,
+        buffer,
         pagesize=letter,
-        rightMargin=72,
-        leftMargin=72,
-        topMargin=72,
-        bottomMargin=72
+        rightMargin=PAGE_MARGIN_POINTS,
+        leftMargin=PAGE_MARGIN_POINTS,
+        topMargin=PAGE_MARGIN_POINTS,
+        bottomMargin=PAGE_MARGIN_POINTS,
     )
     
     # Styles
@@ -113,16 +121,13 @@ async def generate_report_pdf(report_data, idea_name):
         elements.append(Paragraph(f"{i+1}. {step}", normal_style))
         elements.append(Spacer(1, 6))
     
-    # Add page numbers to every page
     def add_page_number(canvas, doc):
         canvas.saveState()
-        canvas.setFont('Helvetica', 8)
+        canvas.setFont("Helvetica", PAGE_NUMBER_FONT_SIZE)
         page_num = canvas.getPageNumber()
         text = f"Page {page_num}"
         canvas.drawRightString(doc.width + doc.rightMargin - 20, doc.bottomMargin/2, text)
         canvas.restoreState()
 
-    # Build the PDF
     doc.build(elements, onFirstPage=add_page_number, onLaterPages=add_page_number)
-    
-    return output_path
+    return buffer.getvalue()
