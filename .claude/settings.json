@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pytest*)",
+      "Bash(ruff*)",
+      "Bash(alembic*)",
+      "Bash(uvicorn app.main:app --reload*)",
+      "Bash(uvicorn app.main:app --host=0.0.0.0 --port=*)",
+      "Bash(curl http://localhost:8000*)",
+      "Bash(curl http://localhost:3000*)",
+      "Bash(git status)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git add*)",
+      "Bash(git branch*)",
+      "Bash(git fetch*)",
+      "Bash(git show*)",
+      "Bash(node -c*)",
+      "Bash(python -m json.tool*)",
+      "Read(d:\\saas\\inp-backend/**)",
+      "Read(./**)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(rm -fr*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fdx*)",
+      "Bash(pip install --upgrade pip*)",
+      "Bash(pip install* --break-system-packages*)",
+      "Bash(dropdb*)",
+      "Bash(docker system prune*)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "MultiEdit(.env)",
+      "MultiEdit(.env.*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git commit*)",
+      "Bash(alembic upgrade*)",
+      "Bash(alembic downgrade*)",
+      "Bash(pip install*)",
+      "Bash(uvicorn* --port=80*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"d:/saas/inp-backend/.claude/hooks/pre-tool-use-secret-guard.js\"",
+            "timeout": 5,
+            "statusMessage": "Checking for secrets..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"d:/saas/inp-backend/.claude/hooks/post-tool-use-ruff.js\"",
+            "timeout": 30,
+            "statusMessage": "Running ruff..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"d:/saas/inp-backend/.claude/hooks/stop-pytest-smoke.js\"",
+            "timeout": 95,
+            "statusMessage": "Smoke-running unit tests..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"d:/saas/inp-backend/.claude/hooks/session-start-load-context.js\"",
+            "timeout": 5,
+            "statusMessage": "Loading project context..."
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "code-review@claude-code-plugins": true,
+    "feature-dev@claude-code-plugins": true,
+    "pr-review-toolkit@claude-code-plugins": true,
+    "security-guidance@claude-code-plugins": true,
+    "commit-commands@claude-code-plugins": true,
+    "caveman@caveman": true
+  }
+}

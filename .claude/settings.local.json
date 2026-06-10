@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "User-local overrides. This file is gitignored. Add personal env var names, extra permissions, and machine-specific paths here. Do NOT commit real secrets into this file even though it is ignored — secrets belong in your shell or a real secret manager.",
+  "permissions": {
+    "allow": []
+  },
+  "env": {}
+}

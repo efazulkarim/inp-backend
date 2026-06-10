@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "skills": {
+    "neon-postgres": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "574cf4b7c901ebc7d88d34e2c3e3d08fdec127bd0047f888de148ff0af787d4e"
+    },
+    "fastapi-router-py": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0001"
+    },
+    "sqlalchemy-models": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0002"
+    },
+    "alembic-migrations": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0003"
+    },
+    "pydantic-settings": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0004"
+    },
+    "jwt-auth-fastapi": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0005"
+    },
+    "polar-payments": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0006"
+    },
+    "stripe-payments": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0007"
+    },
+    "llm-provider-fallback": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0008"
+    },
+    "pytest-fastapi": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0009"
+    },
+    "security-and-hardening": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0010"
+    },
+    "test-driven-development": {
+      "source": "local",
+      "sourceType": "local",
+      "computedHash": "project-skill-0011"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/mcp-config.json",
+  "_comment": "Project-level MCP server config. Auth tokens/secrets are read from process env; never inline values here. Run `claude mcp add` to install server packages on first use.",
+  "mcpServers": {
+    "neon": {
+      "command": "npx",
+      "args": ["-y", "@neondatabase/mcp-server-neon"],
+      "env": {}
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {}
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {}
+    }
+  }
+}
