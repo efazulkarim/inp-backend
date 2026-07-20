@@ -4,7 +4,8 @@ Provides environment validation, type checking, and backward compatibility.
 """
 import os
 from typing import Optional, List
-from pydantic import BaseSettings, Field, validator
+from pydantic_settings import BaseSettings, Field
+from pydantic import field_validator
 from functools import lru_cache
 
 

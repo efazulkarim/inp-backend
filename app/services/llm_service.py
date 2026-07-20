@@ -44,12 +44,23 @@ VULTR_API_KEY = os.getenv("VULTR_API_KEY")
 VULTR_API_BASE_URL = "https://api.vultrinference.com/v1"
 VULTR_CHAT_MODEL = "deepseek-r1-distill-qwen-32b"
 
-# Provider priority: OpenRouter > ApiFreeLLM > GLM > Vultr
-USE_OPENROUTER = bool(OPENROUTER_API_KEY)
-USE_APIFREELL = not USE_OPENROUTER and bool(APIFREELL_API_KEY)
-USE_GLM = not USE_OPENROUTER and not USE_APIFREELL and bool(GLM_API_KEY)
+# Gemini Configuration (Google AI - Highest Priority when configured)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
 
-if USE_OPENROUTER:
+# Provider priority: Gemini > OpenRouter > ApiFreeLLM > GLM > Vultr
+USE_GEMINI = bool(GEMINI_API_KEY)
+USE_OPENROUTER = not USE_GEMINI and bool(OPENROUTER_API_KEY)
+USE_APIFREELL = not USE_GEMINI and not USE_OPENROUTER and bool(APIFREELL_API_KEY)
+USE_GLM = not USE_GEMINI and not USE_OPENROUTER and not USE_APIFREELL and bool(GLM_API_KEY)
+
+if USE_GEMINI:
+    ACTIVE_API_KEY = GEMINI_API_KEY
+    ACTIVE_API_BASE_URL = GEMINI_API_BASE_URL
+    ACTIVE_CHAT_MODEL = GEMINI_CHAT_MODEL
+    PROVIDER_NAME = "Gemini"
+elif USE_OPENROUTER:
     ACTIVE_API_KEY = OPENROUTER_API_KEY
     ACTIVE_API_BASE_URL = OPENROUTER_API_BASE_URL
     ACTIVE_CHAT_MODEL = OPENROUTER_CHAT_MODEL
@@ -98,9 +109,9 @@ def _get_error_response(
 class LLMService:
     @staticmethod
     async def _make_chat_request(payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
-        """Make chat completion request to the active LLM provider (GLM or Vultr)."""
+        """Make chat completion request to the active LLM provider (Gemini, GLM, Vultr, etc.)."""
         if not ACTIVE_API_KEY:
-            key_name = "GLM_API_KEY" if USE_GLM else "VULTR_API_KEY"
+            key_name = "GEMINI_API_KEY" if USE_GEMINI else ("GLM_API_KEY" if USE_GLM else "VULTR_API_KEY")
             print(f"[LLM Service - {PROVIDER_NAME}] CRITICAL ERROR: {key_name} not found.")
             error_response = _get_error_response(
                 error=f"{key_name} not configured",
@@ -111,6 +122,10 @@ class LLMService:
                 strategic_next_steps=[f"Please configure {key_name} in .env"],
             )
             return error_response, 0
+
+        # Gemini API uses a different endpoint structure
+        if USE_GEMINI:
+            return await LLMService._make_gemini_request(payload)
 
         headers = {
             "Authorization": f"Bearer {ACTIVE_API_KEY}",
@@ -135,6 +150,135 @@ class LLMService:
                 result = response.json()
                 token_usage = result.get("usage", {}).get("total_tokens", 0)
                 return result, token_usage
+            except httpx.HTTPStatusError as e:
+                print(f"[LLM Service - {PROVIDER_NAME}] HTTP error: {e.response.status_code} - {e.response.text}")
+                try:
+                    error_details = e.response.json()
+                except json.JSONDecodeError:
+                    error_details = e.response.text
+                error_response = _get_error_response(
+                    error=f"{PROVIDER_NAME} API HTTP error",
+                    insight=f"{PROVIDER_NAME} API HTTP error {e.response.status_code}.",
+                    recommendations=["Check API status and your request."],
+                    reasoning=f"HTTP {e.response.status_code}",
+                    overview=f"{PROVIDER_NAME} API HTTP error {e.response.status_code}.",
+                    strategic_next_steps=["Check API status and your request."],
+                )
+                error_response["status_code"] = e.response.status_code
+                error_response["details"] = error_details
+                return error_response, 0
+            except httpx.RequestError as e:
+                print(f"[LLM Service - {PROVIDER_NAME}] Request error: {e}")
+                error_response = _get_error_response(
+                    error=f"{PROVIDER_NAME} API Request error",
+                    insight=f"{PROVIDER_NAME} API request error.",
+                    recommendations=["Check network or service status."],
+                    reasoning="Request Error",
+                    overview=f"{PROVIDER_NAME} API request error.",
+                    strategic_next_steps=["Check network or service status."],
+                )
+                error_response["details"] = str(e)
+                return error_response, 0
+
+    @staticmethod
+    async def _make_gemini_request(payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+        """Make request to Gemini API (Google AI)."""
+        api_key = GEMINI_API_KEY
+        model = payload.get("model", GEMINI_CHAT_MODEL)
+        
+        # Convert OpenAI-style messages to Gemini format
+        messages = payload.get("messages", [])
+        contents = []
+        system_instruction = None
+        
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            
+            if role == "system":
+                system_instruction = content
+            elif role == "assistant":
+                contents.append({
+                    "role": "model",
+                    "parts": [{"text": content}]
+                })
+            else:  # user
+                contents.append({
+                    "role": "user",
+                    "parts": [{"text": content}]
+                })
+        
+        # Build Gemini API request body
+        request_body = {"contents": contents}
+        
+        # Add generation config
+        generation_config = {
+            "temperature": payload.get("temperature", 0.5),
+            "maxOutputTokens": payload.get("max_tokens", 2048),
+        }
+        request_body["generationConfig"] = generation_config
+        
+        # Add system instruction if present
+        if system_instruction:
+            request_body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+        
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
+        url = f"{GEMINI_API_BASE_URL}/models/{model}:generateContent?key={api_key}"
+        
+        transport = httpx.AsyncHTTPTransport(http2=False)
+        async with httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60)) as client:
+            try:
+                response = await client.post(
+                    url,
+                    json=request_body,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                # Parse Gemini response format
+                if "candidates" in result and len(result["candidates"]) > 0:
+                    candidate = result["candidates"][0]
+                    content = candidate.get("content", {})
+                    parts = content.get("parts", [])
+                    text_content = ""
+                    for part in parts:
+                        text_content += part.get("text", "")
+                    
+                    # Build OpenAI-compatible response structure
+                    openai_style_result = {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": text_content
+                                },
+                                "finish_reason": candidate.get("finishReason", "STOP")
+                            }
+                        ],
+                        "usage": {
+                            "promptTokens": result.get("usageMetadata", {}).get("promptTokenCount", 0),
+                            "completionTokens": result.get("usageMetadata", {}).get("candidatesTokenCount", 0),
+                            "totalTokens": result.get("usageMetadata", {}).get("totalTokenCount", 0)
+                        }
+                    }
+                    token_usage = openai_style_result["usage"]["totalTokens"]
+                    return openai_style_result, token_usage
+                else:
+                    # No candidates returned
+                    error_response = _get_error_response(
+                        error="Gemini API returned no candidates",
+                        insight="Gemini API could not generate a response.",
+                        recommendations=["Try rephrasing your request."],
+                        reasoning="No candidates in response.",
+                        overview="Gemini API returned no candidates.",
+                        strategic_next_steps=["Try rephrasing your request."],
+                    )
+                    return error_response, 0
+                    
             except httpx.HTTPStatusError as e:
                 print(f"[LLM Service - {PROVIDER_NAME}] HTTP error: {e.response.status_code} - {e.response.text}")
                 try:
