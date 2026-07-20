@@ -1,0 +1,7 @@
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+dataclasses-json 0.6.7 requires marshmallow<4.0.0,>=3.18.0, but you have marshmallow 4.0.0 which is incompatible.
+fastmcp 2.10.5 requires python-dotenv>=1.1.0, but you have python-dotenv 1.0.1 which is incompatible.
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 25.0.1 -> 26.1.2
+[notice] To update, run: pip install --upgrade pip
