@@ -77,7 +77,7 @@ InsightPilot Backend is the FastAPI service for the InsightPilot idea validation
 - Optional service credentials depending on the features you run:
   - Google OAuth client credentials.
   - Polar access token, product IDs, and webhook secret.
-  - An LLM provider key (`OPENROUTER_API_KEY`, `APIFREELL_API_KEY`, `GLM_API_KEY`, or `VULTR_API_KEY`).
+  - An LLM provider key (`GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `APIFREELL_API_KEY`, `GLM_API_KEY`, or `VULTR_API_KEY`).
 
 ## Quick start
 
@@ -157,7 +157,7 @@ Configuration is loaded from environment variables, with `.env` support for loca
 | Google OAuth | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` |
 | Polar | `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SUCCESS_URL`, `POLAR_SANDBOX`, `POLAR_SOLOPRENEUR_PRODUCT_ID`, `POLAR_ENTREPRENEUR_PRODUCT_ID` |
 | Stripe legacy routes | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PUBLISHABLE_KEY` |
-| LLM providers | `OPENROUTER_API_KEY`, `OPENROUTER_CHAT_MODEL`, `APIFREELL_API_KEY`, `APIFREELL_CHAT_MODEL`, `GLM_API_KEY`, `GLM_CHAT_MODEL`, `VULTR_API_KEY` |
+| LLM providers | `GEMINI_API_KEY`, `GEMINI_CHAT_MODEL`, `OPENROUTER_API_KEY`, `OPENROUTER_CHAT_MODEL`, `APIFREELL_API_KEY`, `APIFREELL_CHAT_MODEL`, `GLM_API_KEY`, `GLM_CHAT_MODEL`, `VULTR_API_KEY` |
 
 ## Database setup and migrations
 
@@ -288,6 +288,7 @@ Some manual checks require external credentials or a live database. They are not
 | `scripts/database/seed_metric_modules.py` | Seed optional metric module definitions. |
 | `scripts/checks/check_db_connection.py` | Verify database connectivity from the current environment. |
 | `scripts/checks/check_infrastructure.py` | Exercise configuration, logging, repositories, and services. |
+| `scripts/checks/check_import.py` | Verify all application imports resolve correctly. |
 | `scripts/checks/check_llm.py` | Exercise configured LLM provider calls. Requires provider credentials. |
 | `scripts/checks/check_polar_products.py` | Inspect configured Polar product data. Requires Polar credentials. |
 
@@ -340,4 +341,4 @@ Check `FRONTEND_URL` and `ALLOWED_ORIGINS`. In non-production environments, the 
 
 ### LLM report generation returns fallback responses
 
-Set at least one supported provider key. Provider priority is OpenRouter, ApiFreeLLM, GLM, then Vultr.
+Set at least one supported provider key. Provider priority is Gemini, OpenRouter, ApiFreeLLM, GLM, then Vultr.
